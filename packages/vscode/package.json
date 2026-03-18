@@ -1,7 +1,7 @@
 {
   "name": "typek-vscode",
   "displayName": "Typek",
-  "description": "Syntax highlighting for Typek typed templates (.tk files)",
+  "description": "Syntax highlighting and type checking for Typek typed templates (.tk files)",
   "version": "0.0.1",
   "publisher": "typek",
   "engines": {
@@ -72,11 +72,19 @@
     ]
   },
   "scripts": {
-    "build": "tsc -b",
-    "clean": "rm -rf dist *.tsbuildinfo"
+    "build": "esbuild src/index.ts --bundle --outfile=dist/index.js --external:vscode --format=cjs --platform=node --sourcemap",
+    "build:tsc": "tsc -b",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "package": "pnpm build && vsce package --no-dependencies",
+    "install-ext": "pnpm build && vsce package --no-dependencies && code --install-extension typek-vscode-0.0.1.vsix --force"
+  },
+  "dependencies": {
+    "@typek/core": "workspace:*"
   },
   "devDependencies": {
-    "@types/vscode": "^1.110.0"
+    "@types/vscode": "^1.110.0",
+    "@vscode/vsce": "^3.7.1",
+    "esbuild": "^0.27.4"
   },
   "files": [
     "dist",

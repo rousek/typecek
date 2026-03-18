@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(pnpm build:*)",
-      "Bash(pnpm add:*)"
+      "Bash(pnpm add:*)",
+      "Bash(pnpm typecheck:*)",
+      "Bash(pnpm test:*)"
     ]
   }
 }

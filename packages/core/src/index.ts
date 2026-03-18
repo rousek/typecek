@@ -21,3 +21,22 @@ export {
   type PartialNode,
   type MetaVariableNode,
 } from "./parser.js";
+export {
+  TypeKind,
+  formatType,
+  type Type,
+  type TString,
+  type TNumber,
+  type TBoolean,
+  type TNull,
+  type TUndefined,
+  type TAny,
+  type TArray,
+  type TObject,
+  type TUnion,
+  type TStringLiteral,
+  type TNumberLiteral,
+  type TBooleanLiteral,
+} from "./types.js";
+export { typecheck, type Diagnostic } from "./checker.js";
+export { resolveType } from "./resolver.js";

@@ -72,7 +72,20 @@ export function compileAll(checkOnly = false): void {
 
     try {
       const template = fs.readFileSync(templatePath, "utf-8");
-      const result = compile({ template, filename: path.basename(templatePath) });
+      const result = compile({
+        template,
+        filename: path.basename(templatePath),
+        templatePath,
+        typecheck: true,
+      });
+
+      if (result.diagnostics.length > 0) {
+        for (const diag of result.diagnostics) {
+          const prefix = diag.severity === "error" ? "error" : "warning";
+          console.error(`  ${prefix} in ${relativePath}: ${diag.message}`);
+          if (diag.severity === "error") errors++;
+        }
+      }
 
       if (!checkOnly) {
         const outputDir = path.dirname(outputPath);
@@ -80,7 +93,10 @@ export function compileAll(checkOnly = false): void {
         fs.writeFileSync(outputPath, result.code);
       }
 
-      console.log(`  ${checkOnly ? "checked" : "compiled"} ${relativePath}`);
+      const diagCount = result.diagnostics.filter((d) => d.severity === "error").length;
+      if (diagCount === 0) {
+        console.log(`  ${checkOnly ? "checked" : "compiled"} ${relativePath}`);
+      }
     } catch (err) {
       errors++;
       console.error(`  error in ${relativePath}: ${err instanceof Error ? err.message : err}`);

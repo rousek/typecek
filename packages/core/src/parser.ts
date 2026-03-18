@@ -21,6 +21,8 @@ export enum NodeType {
 export interface TextNode {
   type: NodeType.Text;
   value: string;
+  line: number;
+  column: number;
 }
 
 export interface ExpressionNode {
@@ -28,22 +30,30 @@ export interface ExpressionNode {
   expression: ExprNode;
   stripLeading: boolean;
   stripTrailing: boolean;
+  line: number;
+  column: number;
 }
 
 export interface RawExpressionNode {
   type: NodeType.RawExpression;
   expression: ExprNode;
+  line: number;
+  column: number;
 }
 
 export interface IdentifierNode {
   type: NodeType.Identifier;
   name: string;
+  line: number;
+  column: number;
 }
 
 export interface PropertyAccessNode {
   type: NodeType.PropertyAccess;
   object: ExprNode;
   property: string;
+  line: number;
+  column: number;
 }
 
 export interface BinaryExpressionNode {
@@ -51,22 +61,30 @@ export interface BinaryExpressionNode {
   operator: string;
   left: ExprNode;
   right: ExprNode;
+  line: number;
+  column: number;
 }
 
 export interface UnaryExpressionNode {
   type: NodeType.UnaryExpression;
   operator: string;
   operand: ExprNode;
+  line: number;
+  column: number;
 }
 
 export interface StringLiteralNode {
   type: NodeType.StringLiteral;
   value: string;
+  line: number;
+  column: number;
 }
 
 export interface NumberLiteralNode {
   type: NodeType.NumberLiteral;
   value: number;
+  line: number;
+  column: number;
 }
 
 export interface IfBlockNode {
@@ -76,6 +94,8 @@ export interface IfBlockNode {
   alternate: ASTNode[] | IfBlockNode | null;
   stripLeading: boolean;
   stripTrailing: boolean;
+  line: number;
+  column: number;
 }
 
 export interface ForBlockNode {
@@ -84,6 +104,8 @@ export interface ForBlockNode {
   iterable: ExprNode;
   body: ASTNode[];
   emptyBlock: ASTNode[] | null;
+  line: number;
+  column: number;
 }
 
 export interface SwitchBlockNode {
@@ -91,22 +113,30 @@ export interface SwitchBlockNode {
   expression: ExprNode;
   cases: Array<{ value: string; body: ASTNode[] }>;
   defaultCase: ASTNode[] | null;
+  line: number;
+  column: number;
 }
 
 export interface CommentNode {
   type: NodeType.Comment;
   value: string;
+  line: number;
+  column: number;
 }
 
 export interface PartialNode {
   type: NodeType.Partial;
   name: string;
   props: Record<string, ExprNode>;
+  line: number;
+  column: number;
 }
 
 export interface MetaVariableNode {
   type: NodeType.MetaVariable;
   name: string;
+  line: number;
+  column: number;
 }
 
 export type ExprNode =
@@ -247,6 +277,8 @@ export function parse(template: string): TemplateAST {
         operator: op,
         left,
         right,
+        line: left.line,
+        column: left.column,
       };
     }
 
@@ -255,9 +287,10 @@ export function parse(template: string): TemplateAST {
 
   function parseUnary(): ExprNode {
     if (peekType() === TokenType.Not) {
+      const notToken = tokens[pos];
       pos++;
       const operand = parseUnary();
-      return { type: NodeType.UnaryExpression, operator: "!", operand };
+      return { type: NodeType.UnaryExpression, operator: "!", operand, line: notToken.line, column: notToken.column };
     }
     return parsePrimary();
   }
@@ -275,23 +308,23 @@ export function parse(template: string): TemplateAST {
 
     if (t.type === TokenType.NumberLiteral) {
       pos++;
-      return { type: NodeType.NumberLiteral, value: parseFloat(t.value) };
+      return { type: NodeType.NumberLiteral, value: parseFloat(t.value), line: t.line, column: t.column };
     }
 
     if (t.type === TokenType.StringLiteral) {
       pos++;
-      return { type: NodeType.StringLiteral, value: t.value };
+      return { type: NodeType.StringLiteral, value: t.value, line: t.line, column: t.column };
     }
 
     if (t.type === TokenType.Identifier) {
       pos++;
-      let node: ExprNode = { type: NodeType.Identifier, name: t.value };
+      let node: ExprNode = { type: NodeType.Identifier, name: t.value, line: t.line, column: t.column };
 
       // Property access chain
       while (peekType() === TokenType.Dot) {
         pos++; // skip dot
         const prop = expect(TokenType.Identifier);
-        node = { type: NodeType.PropertyAccess, object: node, property: prop.value };
+        node = { type: NodeType.PropertyAccess, object: node, property: prop.value, line: t.line, column: t.column };
       }
 
       return node;
@@ -324,7 +357,7 @@ export function parse(template: string): TemplateAST {
       }
 
       if (t.type === TokenType.Text) {
-        body.push({ type: NodeType.Text, value: t.value });
+        body.push({ type: NodeType.Text, value: t.value, line: t.line, column: t.column });
         pos++;
       } else if (t.type === TokenType.OpenExpression) {
         pos++; // skip {{
@@ -347,7 +380,7 @@ export function parse(template: string): TemplateAST {
             pos++;
           }
           expect(TokenType.CloseExpression);
-          body.push({ type: NodeType.MetaVariable, name: metaToken.value });
+          body.push({ type: NodeType.MetaVariable, name: metaToken.value, line: metaToken.line, column: metaToken.column });
           continue;
         }
 
@@ -364,12 +397,14 @@ export function parse(template: string): TemplateAST {
           expression,
           stripLeading,
           stripTrailing,
+          line: t.line,
+          column: t.column,
         });
       } else if (t.type === TokenType.OpenRawExpression) {
         pos++; // skip {{{
         const expression = collectExpressionTokens();
         expect(TokenType.CloseRawExpression);
-        body.push({ type: NodeType.RawExpression, expression });
+        body.push({ type: NodeType.RawExpression, expression, line: t.line, column: t.column });
       } else if (t.type === TokenType.OpenComment) {
         pos++; // skip {{!
         // Collect comment text
@@ -379,7 +414,7 @@ export function parse(template: string): TemplateAST {
           pos++;
         }
         if (peekType() === TokenType.CloseComment) pos++;
-        body.push({ type: NodeType.Comment, value: commentText });
+        body.push({ type: NodeType.Comment, value: commentText, line: t.line, column: t.column });
       } else if (t.type === TokenType.OpenPartial) {
         pos++; // skip {{>
         const nameToken = expect(TokenType.Identifier);
@@ -396,7 +431,7 @@ export function parse(template: string): TemplateAST {
         }
 
         expect(TokenType.CloseExpression);
-        body.push({ type: NodeType.Partial, name: nameToken.value, props });
+        body.push({ type: NodeType.Partial, name: nameToken.value, props, line: t.line, column: t.column });
       } else if (t.type === TokenType.OpenBlock) {
         pos++; // skip {{# or {{~#
         const stripLeading = t.value === "{{~#";
@@ -404,13 +439,13 @@ export function parse(template: string): TemplateAST {
 
         switch (blockNameToken.value) {
           case "if":
-            body.push(parseIfBlock(stripLeading));
+            body.push(parseIfBlock(stripLeading, t.line, t.column));
             break;
           case "for":
-            body.push(parseForBlock());
+            body.push(parseForBlock(t.line, t.column));
             break;
           case "switch":
-            body.push(parseSwitchBlock());
+            body.push(parseSwitchBlock(t.line, t.column));
             break;
           case "raw": {
             // Raw block content is already handled by lexer as Text tokens
@@ -426,7 +461,8 @@ export function parse(template: string): TemplateAST {
                 break;
               }
               if (peekType() === TokenType.Text) {
-                body.push({ type: NodeType.Text, value: current()!.value });
+                const textTok = current()!;
+                body.push({ type: NodeType.Text, value: textTok.value, line: textTok.line, column: textTok.column });
                 pos++;
               } else {
                 pos++;
@@ -446,7 +482,7 @@ export function parse(template: string): TemplateAST {
     return body;
   }
 
-  function parseIfBlock(stripLeading: boolean): IfBlockNode {
+  function parseIfBlock(stripLeading: boolean, blockLine = 0, blockColumn = 0): IfBlockNode {
     const condition = collectExpressionTokens();
     let stripTrailing = false;
 
@@ -463,13 +499,14 @@ export function parse(template: string): TemplateAST {
     if (peekType() === TokenType.OpenBlock) {
       const nextToken = tokens[pos + 1];
       if (nextToken && nextToken.type === TokenType.BlockName && nextToken.value === "else") {
+        const elseBlockToken = tokens[pos];
         pos++; // skip {{#
         pos++; // skip "else" BlockName
 
         // Check for "else if"
         if (peekType() === TokenType.BlockName && current()!.value === "if") {
           pos++; // skip "if" BlockName
-          alternate = parseIfBlock(false);
+          alternate = parseIfBlock(false, elseBlockToken.line, elseBlockToken.column);
         } else {
           // Plain else
           if (peekType() === TokenType.CloseExpression) pos++;
@@ -504,10 +541,12 @@ export function parse(template: string): TemplateAST {
       alternate,
       stripLeading,
       stripTrailing,
+      line: blockLine,
+      column: blockColumn,
     };
   }
 
-  function parseForBlock(): ForBlockNode {
+  function parseForBlock(blockLine = 0, blockColumn = 0): ForBlockNode {
     const variableToken = expect(TokenType.Identifier);
     expect(TokenType.In);
     const iterable = collectExpressionTokens();
@@ -567,10 +606,12 @@ export function parse(template: string): TemplateAST {
       iterable,
       body,
       emptyBlock,
+      line: blockLine,
+      column: blockColumn,
     };
   }
 
-  function parseSwitchBlock(): SwitchBlockNode {
+  function parseSwitchBlock(blockLine = 0, blockColumn = 0): SwitchBlockNode {
     const expression = collectExpressionTokens();
     expect(TokenType.CloseExpression);
 
@@ -650,6 +691,8 @@ export function parse(template: string): TemplateAST {
       expression,
       cases,
       defaultCase,
+      line: blockLine,
+      column: blockColumn,
     };
   }
 
@@ -659,11 +702,12 @@ export function parse(template: string): TemplateAST {
 
   // Skip newline after type directive if present
   if (peekType() === TokenType.Text && current()!.value.startsWith("\n")) {
-    const textValue = current()!.value.slice(1);
+    const tok = current()!;
+    const textValue = tok.value.slice(1);
     pos++;
     if (textValue.length > 0) {
-      // Re-insert the trimmed text
-      tokens.splice(pos, 0, { type: TokenType.Text, value: textValue });
+      // Re-insert the trimmed text (position shifts by one line)
+      tokens.splice(pos, 0, { type: TokenType.Text, value: textValue, line: tok.line + 1, column: 0 });
     }
   }
 

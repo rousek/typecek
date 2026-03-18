@@ -1,18 +1,27 @@
 import {
   parse,
   NodeType,
+  typecheck,
+  resolveType,
   type ASTNode,
   type ExprNode,
   type ForBlockNode,
+  type Diagnostic,
 } from "@typek/core";
+import path from "path";
 
 export interface CompileOptions {
   template: string;
   filename: string;
+  /** Absolute path to the template file, required for type checking */
+  templatePath?: string;
+  /** Enable type checking against the resolved TypeScript type */
+  typecheck?: boolean;
 }
 
 export interface CompileResult {
   code: string;
+  diagnostics: Diagnostic[];
 }
 
 function getEscapeMode(filename: string): "html" | "none" {
@@ -24,6 +33,25 @@ export function compile(options: CompileOptions): CompileResult {
   const ast = parse(options.template);
   const escapeMode = getEscapeMode(options.filename);
   const { typeName, from } = ast.typeDirective;
+
+  // Type checking
+  let diagnostics: Diagnostic[] = [];
+  if (options.typecheck && options.templatePath) {
+    try {
+      const templateDir = path.dirname(options.templatePath);
+      const typeFilePath = path.resolve(templateDir, from.endsWith(".ts") ? from : from + ".ts");
+      const dataType = resolveType(typeFilePath, typeName);
+      diagnostics = typecheck(ast, dataType);
+    } catch (err) {
+      diagnostics = [{
+        message: err instanceof Error ? err.message : String(err),
+        severity: "error",
+        line: 0,
+        column: 0,
+        length: 0,
+      }];
+    }
+  }
 
   let loopCounter = 0;
   // Stack to track loop variable names for nested loops
@@ -210,5 +238,5 @@ export function compile(options: CompileOptions): CompileResult {
   code += `return __out;\n`;
   code += `}\n`;
 
-  return { code };
+  return { code, diagnostics };
 }

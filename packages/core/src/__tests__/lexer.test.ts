@@ -1,11 +1,20 @@
 import { describe, it, expect } from "vitest";
-import { tokenize, TokenType } from "../lexer.js";
+import { tokenize, TokenType, type Token } from "../lexer.js";
+
+// Strip position info for cleaner assertions
+function bare(tokens: Token[]) {
+  return tokens.map(({ type, value }) => ({ type, value }));
+}
+
+function bareContains(tokens: Token[], expected: { type: TokenType; value: string }) {
+  return tokens.some((t) => t.type === expected.type && t.value === expected.value);
+}
 
 describe("lexer", () => {
   describe("text", () => {
     it("tokenizes plain text", () => {
       const tokens = tokenize("hello world");
-      expect(tokens).toEqual([
+      expect(bare(tokens)).toEqual([
         { type: TokenType.Text, value: "hello world" },
       ]);
     });
@@ -19,7 +28,7 @@ describe("lexer", () => {
   describe("expressions", () => {
     it("tokenizes simple expression", () => {
       const tokens = tokenize("{{name}}");
-      expect(tokens).toEqual([
+      expect(bare(tokens)).toEqual([
         { type: TokenType.OpenExpression, value: "{{" },
         { type: TokenType.Identifier, value: "name" },
         { type: TokenType.CloseExpression, value: "}}" },
@@ -28,7 +37,7 @@ describe("lexer", () => {
 
     it("tokenizes property access", () => {
       const tokens = tokenize("{{user.name}}");
-      expect(tokens).toEqual([
+      expect(bare(tokens)).toEqual([
         { type: TokenType.OpenExpression, value: "{{" },
         { type: TokenType.Identifier, value: "user" },
         { type: TokenType.Dot, value: "." },
@@ -39,13 +48,15 @@ describe("lexer", () => {
 
     it("tokenizes expression with surrounding text", () => {
       const tokens = tokenize("Hello {{name}}!");
-      expect(tokens[0]).toEqual({ type: TokenType.Text, value: "Hello " });
-      expect(tokens[tokens.length - 1]).toEqual({ type: TokenType.Text, value: "!" });
+      expect(tokens[0].type).toBe(TokenType.Text);
+      expect(tokens[0].value).toBe("Hello ");
+      expect(tokens[tokens.length - 1].type).toBe(TokenType.Text);
+      expect(tokens[tokens.length - 1].value).toBe("!");
     });
 
     it("tokenizes raw/unescaped expression with triple braces", () => {
       const tokens = tokenize("{{{content}}}");
-      expect(tokens).toEqual([
+      expect(bare(tokens)).toEqual([
         { type: TokenType.OpenRawExpression, value: "{{{" },
         { type: TokenType.Identifier, value: "content" },
         { type: TokenType.CloseRawExpression, value: "}}}" },
@@ -64,28 +75,28 @@ describe("lexer", () => {
 
     it("tokenizes comparison operators", () => {
       const tokens = tokenize("{{a == b}}");
-      expect(tokens).toContainEqual({ type: TokenType.Equal, value: "==" });
+      expect(bareContains(tokens, { type: TokenType.Equal, value: "==" })).toBe(true);
     });
 
     it("tokenizes not-equal operator", () => {
       const tokens = tokenize("{{a != b}}");
-      expect(tokens).toContainEqual({ type: TokenType.NotEqual, value: "!=" });
+      expect(bareContains(tokens, { type: TokenType.NotEqual, value: "!=" })).toBe(true);
     });
 
     it("tokenizes greater/less than operators", () => {
       const tokens = tokenize("{{a > b}}");
-      expect(tokens).toContainEqual({ type: TokenType.GreaterThan, value: ">" });
+      expect(bareContains(tokens, { type: TokenType.GreaterThan, value: ">" })).toBe(true);
 
       const tokens2 = tokenize("{{a < b}}");
-      expect(tokens2).toContainEqual({ type: TokenType.LessThan, value: "<" });
+      expect(bareContains(tokens2, { type: TokenType.LessThan, value: "<" })).toBe(true);
     });
 
     it("tokenizes greater/less than or equal operators", () => {
       const tokens = tokenize("{{a >= b}}");
-      expect(tokens).toContainEqual({ type: TokenType.GreaterThanOrEqual, value: ">=" });
+      expect(bareContains(tokens, { type: TokenType.GreaterThanOrEqual, value: ">=" })).toBe(true);
 
       const tokens2 = tokenize("{{a <= b}}");
-      expect(tokens2).toContainEqual({ type: TokenType.LessThanOrEqual, value: "<=" });
+      expect(bareContains(tokens2, { type: TokenType.LessThanOrEqual, value: "<=" })).toBe(true);
     });
 
     it("tokenizes arithmetic operators", () => {
@@ -99,174 +110,199 @@ describe("lexer", () => {
 
     it("tokenizes parentheses", () => {
       const tokens = tokenize("{{(a || b) && !c}}");
-      expect(tokens).toContainEqual({ type: TokenType.OpenParen, value: "(" });
-      expect(tokens).toContainEqual({ type: TokenType.CloseParen, value: ")" });
+      expect(bareContains(tokens, { type: TokenType.OpenParen, value: "(" })).toBe(true);
+      expect(bareContains(tokens, { type: TokenType.CloseParen, value: ")" })).toBe(true);
     });
   });
 
   describe("type directive", () => {
     it("tokenizes type directive comment", () => {
       const tokens = tokenize('{{! @type UserProfile from "./types" }}');
-      expect(tokens).toContainEqual({ type: TokenType.OpenComment, value: "{{!" });
-      expect(tokens).toContainEqual({ type: TokenType.TypeDirective, value: "@type" });
-      expect(tokens).toContainEqual({ type: TokenType.Identifier, value: "UserProfile" });
-      expect(tokens).toContainEqual({ type: TokenType.From, value: "from" });
-      expect(tokens).toContainEqual({ type: TokenType.StringLiteral, value: "./types" });
-      expect(tokens).toContainEqual({ type: TokenType.CloseComment, value: "}}" });
+      expect(bareContains(tokens, { type: TokenType.OpenComment, value: "{{!" })).toBe(true);
+      expect(bareContains(tokens, { type: TokenType.TypeDirective, value: "@type" })).toBe(true);
+      expect(bareContains(tokens, { type: TokenType.Identifier, value: "UserProfile" })).toBe(true);
+      expect(bareContains(tokens, { type: TokenType.From, value: "from" })).toBe(true);
+      expect(bareContains(tokens, { type: TokenType.StringLiteral, value: "./types" })).toBe(true);
+      expect(bareContains(tokens, { type: TokenType.CloseComment, value: "}}" })).toBe(true);
     });
   });
 
   describe("comments", () => {
     it("tokenizes regular comment", () => {
       const tokens = tokenize("{{! this is a comment }}");
-      expect(tokens[0]).toEqual({ type: TokenType.OpenComment, value: "{{!" });
+      expect(tokens[0].type).toBe(TokenType.OpenComment);
+      expect(tokens[0].value).toBe("{{!");
     });
   });
 
   describe("control flow", () => {
     it("tokenizes #if block open", () => {
       const tokens = tokenize("{{#if condition}}");
-      expect(tokens).toContainEqual({ type: TokenType.OpenBlock, value: "{{#" });
-      expect(tokens).toContainEqual({ type: TokenType.BlockName, value: "if" });
+      expect(bareContains(tokens, { type: TokenType.OpenBlock, value: "{{#" })).toBe(true);
+      expect(bareContains(tokens, { type: TokenType.BlockName, value: "if" })).toBe(true);
     });
 
     it("tokenizes /if block close", () => {
       const tokens = tokenize("{{/if}}");
-      expect(tokens).toContainEqual({ type: TokenType.CloseBlock, value: "{{/" });
-      expect(tokens).toContainEqual({ type: TokenType.BlockName, value: "if" });
+      expect(bareContains(tokens, { type: TokenType.CloseBlock, value: "{{/" })).toBe(true);
+      expect(bareContains(tokens, { type: TokenType.BlockName, value: "if" })).toBe(true);
     });
 
     it("tokenizes #else", () => {
       const tokens = tokenize("{{#else}}");
-      expect(tokens).toContainEqual({ type: TokenType.OpenBlock, value: "{{#" });
-      expect(tokens).toContainEqual({ type: TokenType.BlockName, value: "else" });
+      expect(bareContains(tokens, { type: TokenType.OpenBlock, value: "{{#" })).toBe(true);
+      expect(bareContains(tokens, { type: TokenType.BlockName, value: "else" })).toBe(true);
     });
 
     it("tokenizes #else if", () => {
       const tokens = tokenize("{{#else if condition}}");
-      expect(tokens).toContainEqual({ type: TokenType.BlockName, value: "else" });
-      expect(tokens).toContainEqual({ type: TokenType.BlockName, value: "if" });
+      expect(bareContains(tokens, { type: TokenType.BlockName, value: "else" })).toBe(true);
+      expect(bareContains(tokens, { type: TokenType.BlockName, value: "if" })).toBe(true);
     });
 
     it("tokenizes #for..in", () => {
       const tokens = tokenize("{{#for item in items}}");
-      expect(tokens).toContainEqual({ type: TokenType.OpenBlock, value: "{{#" });
-      expect(tokens).toContainEqual({ type: TokenType.BlockName, value: "for" });
-      expect(tokens).toContainEqual({ type: TokenType.Identifier, value: "item" });
-      expect(tokens).toContainEqual({ type: TokenType.In, value: "in" });
-      expect(tokens).toContainEqual({ type: TokenType.Identifier, value: "items" });
+      expect(bareContains(tokens, { type: TokenType.OpenBlock, value: "{{#" })).toBe(true);
+      expect(bareContains(tokens, { type: TokenType.BlockName, value: "for" })).toBe(true);
+      expect(bareContains(tokens, { type: TokenType.Identifier, value: "item" })).toBe(true);
+      expect(bareContains(tokens, { type: TokenType.In, value: "in" })).toBe(true);
+      expect(bareContains(tokens, { type: TokenType.Identifier, value: "items" })).toBe(true);
     });
 
     it("tokenizes #empty and /empty", () => {
       const tokens = tokenize("{{#empty}}no items{{/empty}}");
-      expect(tokens).toContainEqual({ type: TokenType.BlockName, value: "empty" });
+      expect(bareContains(tokens, { type: TokenType.BlockName, value: "empty" })).toBe(true);
     });
 
     it("tokenizes #switch", () => {
       const tokens = tokenize("{{#switch user.role}}");
-      expect(tokens).toContainEqual({ type: TokenType.BlockName, value: "switch" });
+      expect(bareContains(tokens, { type: TokenType.BlockName, value: "switch" })).toBe(true);
     });
 
     it("tokenizes #case with string literal", () => {
       const tokens = tokenize('{{#case "admin"}}');
-      expect(tokens).toContainEqual({ type: TokenType.BlockName, value: "case" });
-      expect(tokens).toContainEqual({ type: TokenType.StringLiteral, value: "admin" });
+      expect(bareContains(tokens, { type: TokenType.BlockName, value: "case" })).toBe(true);
+      expect(bareContains(tokens, { type: TokenType.StringLiteral, value: "admin" })).toBe(true);
     });
 
     it("tokenizes #default", () => {
       const tokens = tokenize("{{#default}}");
-      expect(tokens).toContainEqual({ type: TokenType.BlockName, value: "default" });
+      expect(bareContains(tokens, { type: TokenType.BlockName, value: "default" })).toBe(true);
     });
   });
 
   describe("meta-variables", () => {
     it("tokenizes @index", () => {
       const tokens = tokenize("{{@index}}");
-      expect(tokens).toContainEqual({ type: TokenType.MetaVariable, value: "@index" });
+      expect(bareContains(tokens, { type: TokenType.MetaVariable, value: "@index" })).toBe(true);
     });
 
     it("tokenizes @first", () => {
       const tokens = tokenize("{{@first}}");
-      expect(tokens).toContainEqual({ type: TokenType.MetaVariable, value: "@first" });
+      expect(bareContains(tokens, { type: TokenType.MetaVariable, value: "@first" })).toBe(true);
     });
 
     it("tokenizes @last", () => {
       const tokens = tokenize("{{@last}}");
-      expect(tokens).toContainEqual({ type: TokenType.MetaVariable, value: "@last" });
+      expect(bareContains(tokens, { type: TokenType.MetaVariable, value: "@last" })).toBe(true);
     });
 
     it("tokenizes @length", () => {
       const tokens = tokenize("{{@length}}");
-      expect(tokens).toContainEqual({ type: TokenType.MetaVariable, value: "@length" });
+      expect(bareContains(tokens, { type: TokenType.MetaVariable, value: "@length" })).toBe(true);
     });
   });
 
   describe("partials", () => {
     it("tokenizes partial invocation", () => {
       const tokens = tokenize("{{> header}}");
-      expect(tokens).toContainEqual({ type: TokenType.OpenPartial, value: "{{>" });
-      expect(tokens).toContainEqual({ type: TokenType.Identifier, value: "header" });
+      expect(bareContains(tokens, { type: TokenType.OpenPartial, value: "{{>" })).toBe(true);
+      expect(bareContains(tokens, { type: TokenType.Identifier, value: "header" })).toBe(true);
     });
 
     it("tokenizes partial with props", () => {
       const tokens = tokenize("{{> header title=page.title}}");
-      expect(tokens).toContainEqual({ type: TokenType.Identifier, value: "title" });
-      expect(tokens).toContainEqual({ type: TokenType.Assign, value: "=" });
+      expect(bareContains(tokens, { type: TokenType.Identifier, value: "title" })).toBe(true);
+      expect(bareContains(tokens, { type: TokenType.Assign, value: "=" })).toBe(true);
     });
   });
 
   describe("escaping", () => {
     it("tokenizes escaped braces as text", () => {
       const tokens = tokenize("\\{{ expression \\}}");
-      expect(tokens).toEqual([
+      expect(bare(tokens)).toEqual([
         { type: TokenType.Text, value: "{{ expression }}" },
       ]);
     });
 
     it("tokenizes #raw block content as text", () => {
       const tokens = tokenize("{{#raw}}{{ anything }}{{/raw}}");
-      expect(tokens).toContainEqual({ type: TokenType.Text, value: "{{ anything }}" });
+      expect(bareContains(tokens, { type: TokenType.Text, value: "{{ anything }}" })).toBe(true);
     });
   });
 
   describe("whitespace control", () => {
     it("tokenizes tilde on opening tag", () => {
       const tokens = tokenize("{{~#if condition}}");
-      expect(tokens).toContainEqual({ type: TokenType.OpenBlock, value: "{{~#" });
+      expect(bareContains(tokens, { type: TokenType.OpenBlock, value: "{{~#" })).toBe(true);
     });
 
     it("tokenizes tilde on closing tag", () => {
       const tokens = tokenize("{{/if~}}");
-      expect(tokens).toContainEqual({ type: TokenType.WhitespaceStrip, value: "~" });
+      expect(bareContains(tokens, { type: TokenType.WhitespaceStrip, value: "~" })).toBe(true);
     });
 
     it("tokenizes tilde on expression", () => {
       const tokens = tokenize("{{~ name ~}}");
-      expect(tokens).toContainEqual({ type: TokenType.WhitespaceStrip, value: "~" });
+      expect(bareContains(tokens, { type: TokenType.WhitespaceStrip, value: "~" })).toBe(true);
     });
   });
 
   describe("string literals", () => {
     it("tokenizes double-quoted strings", () => {
       const tokens = tokenize('{{#case "hello"}}');
-      expect(tokens).toContainEqual({ type: TokenType.StringLiteral, value: "hello" });
+      expect(bareContains(tokens, { type: TokenType.StringLiteral, value: "hello" })).toBe(true);
     });
 
     it("tokenizes single-quoted strings", () => {
       const tokens = tokenize("{{#case 'hello'}}");
-      expect(tokens).toContainEqual({ type: TokenType.StringLiteral, value: "hello" });
+      expect(bareContains(tokens, { type: TokenType.StringLiteral, value: "hello" })).toBe(true);
     });
   });
 
   describe("number literals", () => {
     it("tokenizes integer", () => {
       const tokens = tokenize("{{42}}");
-      expect(tokens).toContainEqual({ type: TokenType.NumberLiteral, value: "42" });
+      expect(bareContains(tokens, { type: TokenType.NumberLiteral, value: "42" })).toBe(true);
     });
 
     it("tokenizes decimal", () => {
       const tokens = tokenize("{{3.14}}");
-      expect(tokens).toContainEqual({ type: TokenType.NumberLiteral, value: "3.14" });
+      expect(bareContains(tokens, { type: TokenType.NumberLiteral, value: "3.14" })).toBe(true);
+    });
+  });
+
+  describe("position tracking", () => {
+    it("tracks line and column for tokens", () => {
+      const tokens = tokenize("{{name}}");
+      const ident = tokens.find((t) => t.type === TokenType.Identifier);
+      expect(ident?.line).toBe(0);
+      expect(ident?.column).toBe(2);
+    });
+
+    it("tracks positions across lines", () => {
+      const tokens = tokenize("line1\n{{name}}");
+      const ident = tokens.find((t) => t.type === TokenType.Identifier);
+      expect(ident?.line).toBe(1);
+      expect(ident?.column).toBe(2);
+    });
+
+    it("tracks positions for multi-line template", () => {
+      const tokens = tokenize("{{! @type T from \"./t\" }}\n<h1>{{title}}</h1>\n<p>{{body}}</p>");
+      const title = tokens.find((t) => t.type === TokenType.Identifier && t.value === "title");
+      const body = tokens.find((t) => t.type === TokenType.Identifier && t.value === "body");
+      expect(title?.line).toBe(1);
+      expect(body?.line).toBe(2);
     });
   });
 });

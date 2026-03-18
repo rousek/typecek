@@ -40,6 +40,8 @@ export enum TokenType {
 export interface Token {
   type: TokenType;
   value: string;
+  line: number;
+  column: number;
 }
 
 const BLOCK_NAMES = new Set([
@@ -52,10 +54,33 @@ export function tokenize(template: string): Token[] {
   const tokens: Token[] = [];
   let pos = 0;
   let textBuf = "";
+  let textBufStart = 0;
+
+  // Precompute line start offsets for O(1) position lookup
+  const lineStarts = [0];
+  for (let i = 0; i < template.length; i++) {
+    if (template[i] === "\n") lineStarts.push(i + 1);
+  }
+
+  function offsetToLoc(offset: number): { line: number; column: number } {
+    let lo = 0;
+    let hi = lineStarts.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (lineStarts[mid] <= offset) lo = mid;
+      else hi = mid - 1;
+    }
+    return { line: lo, column: offset - lineStarts[lo] };
+  }
+
+  function emit(type: TokenType, value: string, offset: number) {
+    const loc = offsetToLoc(offset);
+    tokens.push({ type, value, line: loc.line, column: loc.column });
+  }
 
   function flushText() {
     if (textBuf.length > 0) {
-      tokens.push({ type: TokenType.Text, value: textBuf });
+      emit(TokenType.Text, textBuf, textBufStart);
       textBuf = "";
     }
   }
@@ -114,110 +139,111 @@ export function tokenize(template: string): Token[] {
       skipWhitespace();
       if (pos >= template.length) break;
 
+      const tokenStart = pos;
+
       // Check for close with tilde
       if (match("~" + closeStr)) {
-        tokens.push({ type: TokenType.WhitespaceStrip, value: "~" });
+        emit(TokenType.WhitespaceStrip, "~", tokenStart);
         advance(1 + closeStr.length);
-        tokens.push({ type: closeTokenType, value: closeStr });
+        emit(closeTokenType, closeStr, tokenStart + 1);
         return;
       }
 
       // Check for close
       if (match(closeStr)) {
         advance(closeStr.length);
-        tokens.push({ type: closeTokenType, value: closeStr });
+        emit(closeTokenType, closeStr, tokenStart);
         return;
       }
 
       const ch = template[pos];
 
       if (ch === "~") {
-        tokens.push({ type: TokenType.WhitespaceStrip, value: "~" });
+        emit(TokenType.WhitespaceStrip, "~", tokenStart);
         pos++;
       } else if (ch === "&" && peek(1) === "&") {
-        tokens.push({ type: TokenType.And, value: "&&" });
+        emit(TokenType.And, "&&", tokenStart);
         pos += 2;
       } else if (ch === "|" && peek(1) === "|") {
-        tokens.push({ type: TokenType.Or, value: "||" });
+        emit(TokenType.Or, "||", tokenStart);
         pos += 2;
       } else if (ch === "!" && peek(1) === "=") {
-        tokens.push({ type: TokenType.NotEqual, value: "!=" });
+        emit(TokenType.NotEqual, "!=", tokenStart);
         pos += 2;
       } else if (ch === "!") {
-        tokens.push({ type: TokenType.Not, value: "!" });
+        emit(TokenType.Not, "!", tokenStart);
         pos++;
       } else if (ch === "=" && peek(1) === "=") {
-        tokens.push({ type: TokenType.Equal, value: "==" });
+        emit(TokenType.Equal, "==", tokenStart);
         pos += 2;
       } else if (ch === "=" && peek(1) !== "=") {
-        tokens.push({ type: TokenType.Assign, value: "=" });
+        emit(TokenType.Assign, "=", tokenStart);
         pos++;
       } else if (ch === ">" && peek(1) === "=") {
-        tokens.push({ type: TokenType.GreaterThanOrEqual, value: ">=" });
+        emit(TokenType.GreaterThanOrEqual, ">=", tokenStart);
         pos += 2;
       } else if (ch === "<" && peek(1) === "=") {
-        tokens.push({ type: TokenType.LessThanOrEqual, value: "<=" });
+        emit(TokenType.LessThanOrEqual, "<=", tokenStart);
         pos += 2;
       } else if (ch === ">") {
-        tokens.push({ type: TokenType.GreaterThan, value: ">" });
+        emit(TokenType.GreaterThan, ">", tokenStart);
         pos++;
       } else if (ch === "<") {
-        tokens.push({ type: TokenType.LessThan, value: "<" });
+        emit(TokenType.LessThan, "<", tokenStart);
         pos++;
       } else if (ch === "+") {
-        tokens.push({ type: TokenType.Plus, value: "+" });
+        emit(TokenType.Plus, "+", tokenStart);
         pos++;
       } else if (ch === "-") {
-        tokens.push({ type: TokenType.Minus, value: "-" });
+        emit(TokenType.Minus, "-", tokenStart);
         pos++;
       } else if (ch === "*") {
-        tokens.push({ type: TokenType.Star, value: "*" });
+        emit(TokenType.Star, "*", tokenStart);
         pos++;
       } else if (ch === "/") {
-        tokens.push({ type: TokenType.Slash, value: "/" });
+        emit(TokenType.Slash, "/", tokenStart);
         pos++;
       } else if (ch === "(") {
-        tokens.push({ type: TokenType.OpenParen, value: "(" });
+        emit(TokenType.OpenParen, "(", tokenStart);
         pos++;
       } else if (ch === ")") {
-        tokens.push({ type: TokenType.CloseParen, value: ")" });
+        emit(TokenType.CloseParen, ")", tokenStart);
         pos++;
       } else if (ch === ".") {
-        tokens.push({ type: TokenType.Dot, value: "." });
+        emit(TokenType.Dot, ".", tokenStart);
         pos++;
       } else if (ch === '"' || ch === "'") {
         const value = readString(ch);
-        tokens.push({ type: TokenType.StringLiteral, value });
+        emit(TokenType.StringLiteral, value, tokenStart);
       } else if (ch === "@") {
         // Meta-variable or type directive
         if (match("@type")) {
-          tokens.push({ type: TokenType.TypeDirective, value: "@type" });
+          emit(TokenType.TypeDirective, "@type", tokenStart);
           pos += 5;
         } else {
           // Read full @word
-          const start = pos;
           pos++; // skip @
           const word = readWord();
           const metaVar = "@" + word;
           if (META_VARIABLES.has(metaVar)) {
-            tokens.push({ type: TokenType.MetaVariable, value: metaVar });
+            emit(TokenType.MetaVariable, metaVar, tokenStart);
           } else {
-            tokens.push({ type: TokenType.Identifier, value: metaVar });
+            emit(TokenType.Identifier, metaVar, tokenStart);
           }
         }
       } else if (/[0-9]/.test(ch)) {
         const num = readNumber();
-        tokens.push({ type: TokenType.NumberLiteral, value: num });
+        emit(TokenType.NumberLiteral, num, tokenStart);
       } else if (/[a-zA-Z_$]/.test(ch)) {
         const word = readWord();
         if (word === "from") {
-          tokens.push({ type: TokenType.From, value: "from" });
+          emit(TokenType.From, "from", tokenStart);
         } else if (word === "in") {
-          tokens.push({ type: TokenType.In, value: "in" });
+          emit(TokenType.In, "in", tokenStart);
         } else if (BLOCK_NAMES.has(word)) {
-          tokens.push({ type: TokenType.BlockName, value: word });
+          emit(TokenType.BlockName, word, tokenStart);
         } else {
-          tokens.push({ type: TokenType.Identifier, value: word });
+          emit(TokenType.Identifier, word, tokenStart);
         }
       } else {
         // Skip unknown characters
@@ -229,6 +255,7 @@ export function tokenize(template: string): Token[] {
   while (pos < template.length) {
     // Escaped braces
     if (match("\\{{")) {
+      if (textBuf.length === 0) textBufStart = pos;
       pos += 3; // skip \{{
       // Collect until \}} or end
       let escaped = "{{";
@@ -248,7 +275,7 @@ export function tokenize(template: string): Token[] {
     // Raw expression {{{
     if (match("{{{")) {
       flushText();
-      tokens.push({ type: TokenType.OpenRawExpression, value: "{{{" });
+      emit(TokenType.OpenRawExpression, "{{{", pos);
       pos += 3;
       tokenizeExpressionContent(TokenType.CloseRawExpression, "}}}");
       continue;
@@ -257,7 +284,7 @@ export function tokenize(template: string): Token[] {
     // Comment {{! (only if followed by space, @, or --)
     if (match("{{!") && (template[pos + 3] === " " || template[pos + 3] === "@" || template[pos + 3] === "-")) {
       flushText();
-      tokens.push({ type: TokenType.OpenComment, value: "{{!" });
+      emit(TokenType.OpenComment, "{{!", pos);
       pos += 3;
       tokenizeExpressionContent(TokenType.CloseComment, "}}");
       continue;
@@ -266,7 +293,7 @@ export function tokenize(template: string): Token[] {
     // Partial {{>
     if (match("{{>")) {
       flushText();
-      tokens.push({ type: TokenType.OpenPartial, value: "{{>" });
+      emit(TokenType.OpenPartial, "{{>", pos);
       pos += 3;
       tokenizeExpressionContent(TokenType.CloseExpression, "}}");
       continue;
@@ -275,7 +302,7 @@ export function tokenize(template: string): Token[] {
     // Close block {{/
     if (match("{{/")) {
       flushText();
-      tokens.push({ type: TokenType.CloseBlock, value: "{{/" });
+      emit(TokenType.CloseBlock, "{{/", pos);
       pos += 3;
       tokenizeExpressionContent(TokenType.CloseExpression, "}}");
       continue;
@@ -284,7 +311,7 @@ export function tokenize(template: string): Token[] {
     // Open block {{~#
     if (match("{{~#")) {
       flushText();
-      tokens.push({ type: TokenType.OpenBlock, value: "{{~#" });
+      emit(TokenType.OpenBlock, "{{~#", pos);
       pos += 4;
       // Check for raw block
       const savedPos = pos;
@@ -292,10 +319,14 @@ export function tokenize(template: string): Token[] {
       if (match("raw")) {
         const afterRaw = pos + 3;
         if (afterRaw >= template.length || /[\s}]/.test(template[afterRaw])) {
+          const rawStart = pos;
           pos = afterRaw;
-          tokens.push({ type: TokenType.BlockName, value: "raw" });
+          emit(TokenType.BlockName, "raw", rawStart);
           skipWhitespace();
-          if (match("}}")) pos += 2;
+          if (match("}}")) {
+            emit(TokenType.CloseExpression, "}}", pos);
+            pos += 2;
+          }
           // Now collect raw content until {{/raw}}
           collectRawContent();
           continue;
@@ -309,7 +340,7 @@ export function tokenize(template: string): Token[] {
     // Open block {{#
     if (match("{{#")) {
       flushText();
-      tokens.push({ type: TokenType.OpenBlock, value: "{{#" });
+      emit(TokenType.OpenBlock, "{{#", pos);
       pos += 3;
       // Check for raw block
       const savedPos = pos;
@@ -317,10 +348,14 @@ export function tokenize(template: string): Token[] {
       if (match("raw")) {
         const afterRaw = pos + 3;
         if (afterRaw >= template.length || /[\s}]/.test(template[afterRaw])) {
+          const rawStart = pos;
           pos = afterRaw;
-          tokens.push({ type: TokenType.BlockName, value: "raw" });
+          emit(TokenType.BlockName, "raw", rawStart);
           skipWhitespace();
-          if (match("}}")) pos += 2;
+          if (match("}}")) {
+            emit(TokenType.CloseExpression, "}}", pos);
+            pos += 2;
+          }
           // Now collect raw content until {{/raw}}
           collectRawContent();
           continue;
@@ -334,8 +369,8 @@ export function tokenize(template: string): Token[] {
     // Expression {{~ (with whitespace strip)
     if (match("{{~")) {
       flushText();
-      tokens.push({ type: TokenType.OpenExpression, value: "{{" });
-      tokens.push({ type: TokenType.WhitespaceStrip, value: "~" });
+      emit(TokenType.OpenExpression, "{{", pos);
+      emit(TokenType.WhitespaceStrip, "~", pos + 2);
       pos += 3;
       tokenizeExpressionContent(TokenType.CloseExpression, "}}");
       continue;
@@ -344,13 +379,14 @@ export function tokenize(template: string): Token[] {
     // Expression {{
     if (match("{{")) {
       flushText();
-      tokens.push({ type: TokenType.OpenExpression, value: "{{" });
+      emit(TokenType.OpenExpression, "{{", pos);
       pos += 2;
       tokenizeExpressionContent(TokenType.CloseExpression, "}}");
       continue;
     }
 
     // Regular text
+    if (textBuf.length === 0) textBufStart = pos;
     textBuf += template[pos];
     pos++;
   }
@@ -360,12 +396,13 @@ export function tokenize(template: string): Token[] {
 
   function collectRawContent() {
     let raw = "";
+    let rawStart = pos;
     while (pos < template.length) {
       if (match("{{/raw}}")) {
         if (raw.length > 0) {
-          tokens.push({ type: TokenType.Text, value: raw });
+          emit(TokenType.Text, raw, rawStart);
         }
-        tokens.push({ type: TokenType.CloseBlock, value: "{{/" });
+        emit(TokenType.CloseBlock, "{{/", pos);
         pos += 3;
         tokenizeExpressionContent(TokenType.CloseExpression, "}}");
         return;
@@ -375,7 +412,7 @@ export function tokenize(template: string): Token[] {
     }
     // If we reach here, unclosed raw block
     if (raw.length > 0) {
-      tokens.push({ type: TokenType.Text, value: raw });
+      emit(TokenType.Text, raw, rawStart);
     }
   }
 }
