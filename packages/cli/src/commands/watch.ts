@@ -1,0 +1,44 @@
+import fs from "fs";
+import path from "path";
+import { compile } from "@typek/compiler";
+import { findTsconfigRoot, findSourceRoot } from "./compile.js";
+
+export function watch(): void {
+  const projectRoot = findTsconfigRoot();
+  const sourceRoot = findSourceRoot(projectRoot);
+  const typekDir = path.join(projectRoot, ".typek");
+
+  console.log(`Watching for .tk file changes in ${path.relative(process.cwd(), sourceRoot) || "."}...`);
+  console.log("Press Ctrl+C to stop.\n");
+
+  fs.watch(sourceRoot, { recursive: true }, (eventType, filename) => {
+    if (!filename || !filename.endsWith(".tk")) return;
+
+    const templatePath = path.join(sourceRoot, filename);
+    const relativePath = filename;
+    const outputPath = path.join(typekDir, relativePath + ".ts");
+
+    // Handle deletion
+    if (!fs.existsSync(templatePath)) {
+      if (fs.existsSync(outputPath)) {
+        fs.unlinkSync(outputPath);
+        console.log(`  deleted ${relativePath}`);
+      }
+      return;
+    }
+
+    // Compile
+    try {
+      const template = fs.readFileSync(templatePath, "utf-8");
+      const result = compile({ template, filename: path.basename(templatePath) });
+
+      const outputDir = path.dirname(outputPath);
+      fs.mkdirSync(outputDir, { recursive: true });
+      fs.writeFileSync(outputPath, result.code);
+
+      console.log(`  compiled ${relativePath}`);
+    } catch (err) {
+      console.error(`  error in ${relativePath}: ${err instanceof Error ? err.message : err}`);
+    }
+  });
+}

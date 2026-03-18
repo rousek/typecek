@@ -1,0 +1,17 @@
+{
+  "name": "@typek/compiler",
+  "version": "0.0.1",
+  "description": "AST to JS/TS function code generator for Typek",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@typek/core": "workspace:*",
+    "@typek/runtime": "workspace:*"
+  },
+  "files": ["dist"],
+  "license": "UNLICENSED"
+}

@@ -1,0 +1,95 @@
+import fs from "fs";
+import path from "path";
+import { compile } from "@typek/compiler";
+
+export function findTsconfigRoot(): string {
+  let dir = process.cwd();
+  while (dir !== path.dirname(dir)) {
+    if (fs.existsSync(path.join(dir, "tsconfig.json"))) return dir;
+    dir = path.dirname(dir);
+  }
+  return process.cwd();
+}
+
+export function findSourceRoot(projectRoot: string): string {
+  const tsconfigPath = path.join(projectRoot, "tsconfig.json");
+  if (fs.existsSync(tsconfigPath)) {
+    try {
+      const tsconfig = JSON.parse(fs.readFileSync(tsconfigPath, "utf-8"));
+      const rootDir = tsconfig.compilerOptions?.rootDir;
+      if (rootDir) return path.resolve(projectRoot, rootDir);
+      const include = tsconfig.include;
+      if (Array.isArray(include) && include.length > 0) {
+        const first = include[0].replace(/\/\*\*.*$/, "");
+        return path.resolve(projectRoot, first);
+      }
+    } catch {
+      // fall through
+    }
+  }
+  // Default to src/ or project root
+  const srcDir = path.join(projectRoot, "src");
+  if (fs.existsSync(srcDir)) return srcDir;
+  return projectRoot;
+}
+
+function findTemplateFiles(dir: string): string[] {
+  const results: string[] = [];
+
+  function walk(currentDir: string) {
+    const entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === "node_modules" || entry.name === ".typek" || entry.name.startsWith(".")) continue;
+        walk(fullPath);
+      } else if (entry.name.endsWith(".tk")) {
+        results.push(fullPath);
+      }
+    }
+  }
+
+  walk(dir);
+  return results;
+}
+
+export function compileAll(checkOnly = false): void {
+  const projectRoot = findTsconfigRoot();
+  const sourceRoot = findSourceRoot(projectRoot);
+  const typekDir = path.join(projectRoot, ".typek");
+  const templateFiles = findTemplateFiles(sourceRoot);
+
+  if (templateFiles.length === 0) {
+    console.log("No .tk template files found.");
+    return;
+  }
+
+  let errors = 0;
+
+  for (const templatePath of templateFiles) {
+    const relativePath = path.relative(sourceRoot, templatePath);
+    const outputPath = path.join(typekDir, relativePath + ".ts");
+
+    try {
+      const template = fs.readFileSync(templatePath, "utf-8");
+      const result = compile({ template, filename: path.basename(templatePath) });
+
+      if (!checkOnly) {
+        const outputDir = path.dirname(outputPath);
+        fs.mkdirSync(outputDir, { recursive: true });
+        fs.writeFileSync(outputPath, result.code);
+      }
+
+      console.log(`  ${checkOnly ? "checked" : "compiled"} ${relativePath}`);
+    } catch (err) {
+      errors++;
+      console.error(`  error in ${relativePath}: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+
+  console.log(`\n${templateFiles.length} template(s), ${errors} error(s).`);
+
+  if (errors > 0) {
+    process.exitCode = 1;
+  }
+}

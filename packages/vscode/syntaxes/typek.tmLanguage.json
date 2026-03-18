@@ -1,0 +1,199 @@
+{
+  "scopeName": "text.typek",
+  "name": "Typek",
+  "patterns": [
+    { "include": "#typek-expressions" }
+  ],
+  "repository": {
+    "typek-expressions": {
+      "patterns": [
+        { "include": "#type-directive" },
+        { "include": "#comment" },
+        { "include": "#raw-block" },
+        { "include": "#raw-expression" },
+        { "include": "#block-close" },
+        { "include": "#block-open" },
+        { "include": "#partial" },
+        { "include": "#escaped-braces" },
+        { "include": "#expression" }
+      ]
+    },
+    "type-directive": {
+      "name": "meta.directive.typek",
+      "begin": "\\{\\{!\\s*(@type)\\b",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.directive.typek" },
+        "1": { "name": "keyword.control.directive.typek" }
+      },
+      "end": "\\}\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.directive.typek" }
+      },
+      "patterns": [
+        {
+          "match": "\\b(from)\\b",
+          "name": "keyword.control.from.typek"
+        },
+        {
+          "match": "\"[^\"]*\"|'[^']*'",
+          "name": "string.quoted.typek"
+        },
+        {
+          "match": "\\b[A-Z][a-zA-Z0-9_]*\\b",
+          "name": "entity.name.type.typek"
+        }
+      ]
+    },
+    "comment": {
+      "name": "comment.block.typek",
+      "begin": "\\{\\{!(?!\\s*@type)",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.comment.begin.typek" }
+      },
+      "end": "\\}\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.comment.end.typek" }
+      }
+    },
+    "raw-block": {
+      "name": "meta.raw-block.typek",
+      "begin": "\\{\\{#raw\\}\\}",
+      "beginCaptures": {
+        "0": { "name": "keyword.control.raw.typek" }
+      },
+      "end": "\\{\\{/raw\\}\\}",
+      "endCaptures": {
+        "0": { "name": "keyword.control.raw.typek" }
+      }
+    },
+    "raw-expression": {
+      "name": "meta.expression.raw.typek",
+      "begin": "\\{\\{\\{",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.expression.begin.typek" }
+      },
+      "end": "\\}\\}\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.expression.end.typek" }
+      },
+      "patterns": [
+        { "include": "#expression-content" }
+      ]
+    },
+    "block-close": {
+      "name": "meta.block.close.typek",
+      "begin": "\\{\\{/",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.block.end.typek" }
+      },
+      "end": "\\}\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.block.end.typek" }
+      },
+      "patterns": [
+        {
+          "match": "\\b(if|for|switch|case|default|empty|raw)\\b",
+          "name": "keyword.control.typek"
+        }
+      ]
+    },
+    "block-open": {
+      "name": "meta.block.open.typek",
+      "begin": "\\{\\{~?#",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.block.begin.typek" }
+      },
+      "end": "\\}\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.block.end.typek" }
+      },
+      "patterns": [
+        {
+          "match": "\\b(if|else|for|switch|case|default|empty)\\b",
+          "name": "keyword.control.typek"
+        },
+        {
+          "match": "\\b(in)\\b",
+          "name": "keyword.operator.typek"
+        },
+        { "include": "#expression-content" }
+      ]
+    },
+    "partial": {
+      "name": "meta.partial.typek",
+      "begin": "\\{\\{>",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.partial.begin.typek" }
+      },
+      "end": "\\}\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.partial.end.typek" }
+      },
+      "patterns": [
+        {
+          "match": "\\b[a-zA-Z_][a-zA-Z0-9_-]*\\b",
+          "name": "entity.name.function.partial.typek"
+        },
+        {
+          "match": "=",
+          "name": "keyword.operator.assignment.typek"
+        },
+        { "include": "#expression-content" }
+      ]
+    },
+    "escaped-braces": {
+      "match": "\\\\\\{\\{|\\\\\\}\\}",
+      "name": "constant.character.escape.typek"
+    },
+    "expression": {
+      "name": "meta.expression.typek",
+      "begin": "\\{\\{~?",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.expression.begin.typek" }
+      },
+      "end": "~?\\}\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.expression.end.typek" }
+      },
+      "patterns": [
+        { "include": "#expression-content" }
+      ]
+    },
+    "expression-content": {
+      "patterns": [
+        {
+          "match": "\"[^\"]*\"|'[^']*'",
+          "name": "string.quoted.typek"
+        },
+        {
+          "match": "\\b[0-9]+(\\.[0-9]+)?\\b",
+          "name": "constant.numeric.typek"
+        },
+        {
+          "match": "@(index|first|last|length)\\b",
+          "name": "variable.language.meta.typek"
+        },
+        {
+          "match": "&&|\\|\\||!(?!=)",
+          "name": "keyword.operator.logical.typek"
+        },
+        {
+          "match": "==|!=|>=|<=|>|<",
+          "name": "keyword.operator.comparison.typek"
+        },
+        {
+          "match": "[+\\-*/]",
+          "name": "keyword.operator.arithmetic.typek"
+        },
+        {
+          "match": "\\.",
+          "name": "punctuation.accessor.typek"
+        },
+        {
+          "match": "\\b[a-zA-Z_$][a-zA-Z0-9_$]*\\b",
+          "name": "variable.other.typek"
+        }
+      ]
+    }
+  }
+}

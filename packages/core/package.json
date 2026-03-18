@@ -1,0 +1,13 @@
+{
+  "name": "@typek/core",
+  "version": "0.0.1",
+  "description": "Lexer, parser, AST definitions, and type-checker for Typek",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "files": ["dist"],
+  "license": "UNLICENSED"
+}

@@ -1,0 +1,87 @@
+{
+  "name": "typek-vscode",
+  "displayName": "Typek",
+  "description": "Syntax highlighting for Typek typed templates (.tk files)",
+  "version": "0.0.1",
+  "publisher": "typek",
+  "engines": {
+    "vscode": "^1.110.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "main": "./dist/index.js",
+  "activationEvents": [],
+  "contributes": {
+    "languages": [
+      {
+        "id": "typek-html",
+        "aliases": [
+          "Typek HTML",
+          "tk-html"
+        ],
+        "extensions": [
+          ".html.tk"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "typek-ts",
+        "aliases": [
+          "Typek TypeScript",
+          "tk-ts"
+        ],
+        "extensions": [
+          ".ts.tk"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "typek",
+        "aliases": [
+          "Typek"
+        ],
+        "extensions": [
+          ".tk"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "typek-html",
+        "scopeName": "text.html.typek",
+        "path": "./syntaxes/typek-html.tmLanguage.json",
+        "embeddedLanguages": {
+          "text.html.basic": "html"
+        }
+      },
+      {
+        "language": "typek-ts",
+        "scopeName": "source.ts.typek",
+        "path": "./syntaxes/typek-ts.tmLanguage.json",
+        "embeddedLanguages": {
+          "source.ts": "typescript"
+        }
+      },
+      {
+        "language": "typek",
+        "scopeName": "text.typek",
+        "path": "./syntaxes/typek.tmLanguage.json"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.110.0"
+  },
+  "files": [
+    "dist",
+    "syntaxes",
+    "language-configuration.json"
+  ],
+  "license": "UNLICENSED"
+}
