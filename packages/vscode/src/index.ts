@@ -46,7 +46,7 @@ export function activate(context: vscode.ExtensionContext): void {
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
         checkDocument(event.document);
-      }, 500);
+      }, 200);
     }),
   );
 
@@ -84,8 +84,92 @@ function resolveDataType(document: vscode.TextDocument): { ast: ReturnType<typeo
   }
 }
 
+const TAG_HELP: Record<string, { syntax: string; description: string }> = {
+  "if": {
+    syntax: "{{#if condition}}...{{#else}}...{{/if}}",
+    description: "Conditionally renders content. The condition can be any expression.",
+  },
+  "else": {
+    syntax: "{{#if condition}}...{{#else}}...{{/if}}",
+    description: "Fallback branch of an `{{#if}}` block. Also supports `{{#else if condition}}`.",
+  },
+  "for": {
+    syntax: "{{#for item in collection}}...{{/for}}",
+    description: "Iterates over an array. Inside the loop you can use `{{@index}}`, `{{@first}}`, `{{@last}}`, and `{{@length}}`.",
+  },
+  "empty": {
+    syntax: "{{#for item in list}}...{{#empty}}...{{/empty}}{{/for}}",
+    description: "Rendered when the collection in a `{{#for}}` loop is empty.",
+  },
+  "switch": {
+    syntax: '{{#switch expr}}{{#case "value"}}...{{/case}}{{#default}}...{{/default}}{{/switch}}',
+    description: "Matches an expression against string cases.",
+  },
+  "case": {
+    syntax: '{{#case "value"}}...{{/case}}',
+    description: "A branch inside a `{{#switch}}` block. The value must be a string literal.",
+  },
+  "default": {
+    syntax: "{{#default}}...{{/default}}",
+    description: "Fallback branch inside a `{{#switch}}` block when no case matches.",
+  },
+  "raw": {
+    syntax: "{{#raw}}...{{/raw}}",
+    description: "Content inside is output as-is without parsing template expressions.",
+  },
+};
+
+function getTagHover(document: vscode.TextDocument, position: vscode.Position): vscode.Hover | undefined {
+  const line = document.lineAt(position.line).text;
+  const col = position.character;
+
+  // Match opening tags: {{#tagName or {{/tagName
+  const tagPattern = /\{\{[#/]\s*(\w+)/g;
+  let match: RegExpExecArray | null;
+  while ((match = tagPattern.exec(line)) !== null) {
+    const tagName = match[1];
+    const tagStart = match.index + match[0].length - tagName.length;
+    const tagEnd = tagStart + tagName.length;
+    if (col >= tagStart && col < tagEnd) {
+      const help = TAG_HELP[tagName];
+      if (!help) return undefined;
+      const md = new vscode.MarkdownString();
+      md.appendCodeblock(help.syntax, "typek");
+      md.appendMarkdown(help.description);
+      const range = new vscode.Range(position.line, tagStart, position.line, tagEnd);
+      return new vscode.Hover(md, range);
+    }
+  }
+
+  // Match meta variables: {{@name}}
+  const metaPattern = /\{\{\s*(@(?:index|first|last|length))\s*\}\}/g;
+  while ((match = metaPattern.exec(line)) !== null) {
+    const name = match[1];
+    const start = match.index + match[0].indexOf(name);
+    const end = start + name.length;
+    if (col >= start && col < end) {
+      const md = new vscode.MarkdownString();
+      md.appendCodeblock(`{{${name}}}`, "typek");
+      md.appendMarkdown({
+        "@index": "Zero-based index of the current iteration.",
+        "@first": "`true` on the first iteration.",
+        "@last": "`true` on the last iteration.",
+        "@length": "Total number of items in the collection.",
+      }[name] ?? "");
+      const range = new vscode.Range(position.line, start, position.line, end);
+      return new vscode.Hover(md, range);
+    }
+  }
+
+  return undefined;
+}
+
 function getHover(document: vscode.TextDocument, position: vscode.Position): vscode.Hover | undefined {
   if (!isTypekDocument(document)) return undefined;
+
+  // Check tag help first (no parsing needed)
+  const tagHover = getTagHover(document, position);
+  if (tagHover) return tagHover;
 
   const resolved = resolveDataType(document);
   if (!resolved) return undefined;
