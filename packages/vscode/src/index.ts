@@ -142,6 +142,20 @@ function getTagHover(document: vscode.TextDocument, position: vscode.Position): 
     }
   }
 
+  // Match tilde whitespace stripping: {{~ or ~}}
+  const tildePattern = /\{\{~|~\}\}/g;
+  while ((match = tildePattern.exec(line)) !== null) {
+    const tildeChar = match[0].indexOf("~");
+    const tildePos = match.index + tildeChar;
+    if (col === tildePos) {
+      const md = new vscode.MarkdownString();
+      md.appendCodeblock("{{~ expr}} or {{expr ~}}", "typek");
+      md.appendMarkdown("The `~` strips whitespace on that side of the tag. Use on the left (`{{~`) to trim whitespace before, or on the right (`~}}`) to trim whitespace after.");
+      const range = new vscode.Range(position.line, tildePos, position.line, tildePos + 1);
+      return new vscode.Hover(md, range);
+    }
+  }
+
   // Match meta variables: {{@name}}
   const metaPattern = /\{\{\s*(@(?:index|first|last|length))\s*\}\}/g;
   while ((match = metaPattern.exec(line)) !== null) {
