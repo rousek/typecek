@@ -3,6 +3,7 @@ export {
   parse,
   NodeType,
   type TemplateAST,
+  type TypeDirective,
   type ASTNode,
   type ExprNode,
   type TextNode,
@@ -24,6 +25,7 @@ export {
 export {
   TypeKind,
   formatType,
+  formatTypeDefinition,
   type Type,
   type TString,
   type TNumber,
@@ -39,4 +41,5 @@ export {
   type TBooleanLiteral,
 } from "./types.js";
 export { typecheck, type Diagnostic } from "./checker.js";
+export { typeAtPosition, type HoverResult } from "./hover.js";
 export { resolveType } from "./resolver.js";

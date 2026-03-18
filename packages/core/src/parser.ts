@@ -158,8 +158,15 @@ export type ASTNode =
   | PartialNode
   | MetaVariableNode;
 
+export interface TypeDirective {
+  typeName: string;
+  from: string;
+  typeNameLine: number;
+  typeNameColumn: number;
+}
+
 export interface TemplateAST {
-  typeDirective: { typeName: string; from: string };
+  typeDirective: TypeDirective;
   body: ASTNode[];
 }
 
@@ -228,7 +235,7 @@ export function parse(template: string): TemplateAST {
   }
 
   // Parse type directive from the beginning of the tokens
-  function parseTypeDirective(): { typeName: string; from: string } {
+  function parseTypeDirective(): TypeDirective {
     // First tokens must be: OpenComment, TypeDirective, Identifier, From, StringLiteral, CloseComment
     if (peekType() !== TokenType.OpenComment) {
       throw new Error("Template must start with a type directive: {{! @type TypeName from \"path\" }}");
@@ -245,7 +252,12 @@ export function parse(template: string): TemplateAST {
     const fromToken = expect(TokenType.StringLiteral);
     expect(TokenType.CloseComment);
 
-    return { typeName: typeNameToken.value, from: fromToken.value };
+    return {
+      typeName: typeNameToken.value,
+      from: fromToken.value,
+      typeNameLine: typeNameToken.line,
+      typeNameColumn: typeNameToken.column,
+    };
   }
 
   // Check for duplicate type directives

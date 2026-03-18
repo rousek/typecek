@@ -8,6 +8,8 @@ describe("parser", () => {
       expect(ast.typeDirective).toEqual({
         typeName: "UserProfile",
         from: "./types",
+        typeNameLine: 0,
+        typeNameColumn: 10,
       });
     });
 

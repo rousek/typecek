@@ -1,8 +1,18 @@
 import * as vscode from "vscode";
-import { parse, typecheck, resolveType } from "@typek/core";
+import {
+  parse,
+  typecheck,
+  resolveType,
+  typeAtPosition,
+  formatTypeDefinition,
+  formatType,
+  TypeKind,
+  type Type,
+} from "@typek/core";
 import path from "path";
 
 const TYPEK_LANGUAGES = ["typek", "typek-html", "typek-ts"];
+const TYPEK_SELECTORS: vscode.DocumentSelector = TYPEK_LANGUAGES.map((lang) => ({ language: lang }));
 
 let diagnosticCollection: vscode.DiagnosticCollection;
 
@@ -46,10 +56,49 @@ export function activate(context: vscode.ExtensionContext): void {
       diagnosticCollection.delete(document.uri);
     }),
   );
+
+  // Hover provider
+  context.subscriptions.push(
+    vscode.languages.registerHoverProvider(TYPEK_SELECTORS, {
+      provideHover(document, position) {
+        return getHover(document, position);
+      },
+    }),
+  );
 }
 
 function isTypekDocument(document: vscode.TextDocument): boolean {
   return TYPEK_LANGUAGES.includes(document.languageId);
+}
+
+function resolveDataType(document: vscode.TextDocument): { ast: ReturnType<typeof parse>; dataType: Type } | undefined {
+  try {
+    const ast = parse(document.getText());
+    const { typeName, from } = ast.typeDirective;
+    const templateDir = path.dirname(document.uri.fsPath);
+    const typeFilePath = path.resolve(templateDir, from.endsWith(".ts") ? from : from + ".ts");
+    const dataType = resolveType(typeFilePath, typeName);
+    return { ast, dataType };
+  } catch {
+    return undefined;
+  }
+}
+
+function getHover(document: vscode.TextDocument, position: vscode.Position): vscode.Hover | undefined {
+  if (!isTypekDocument(document)) return undefined;
+
+  const resolved = resolveDataType(document);
+  if (!resolved) return undefined;
+
+  const result = typeAtPosition(resolved.ast, resolved.dataType, position.line, position.character);
+  if (!result) return undefined;
+
+  const code = formatTypeDefinition(result.type, result.name);
+  const markdown = new vscode.MarkdownString();
+  markdown.appendCodeblock(code, "typescript");
+
+  const range = new vscode.Range(result.line, result.column, result.line, result.column + result.length);
+  return new vscode.Hover(markdown, range);
 }
 
 function checkDocument(document: vscode.TextDocument): void {

@@ -71,6 +71,27 @@ export type Type =
   | TNumberLiteral
   | TBooleanLiteral;
 
+/**
+ * Formats a type as a multi-line TypeScript-like definition.
+ * For named object types, renders as `interface Name { ... }`.
+ * For other types, renders as `type: ...`.
+ */
+export function formatTypeDefinition(type: Type, label?: string): string {
+  if (type.kind === TypeKind.Object) {
+    const name = label ?? type.name ?? "(anonymous)";
+    const entries = [...type.properties.entries()];
+    if (entries.length === 0) return `interface ${name} {}`;
+    const props = entries.map(([k, v]) => `  ${k}: ${formatType(v)};`).join("\n");
+    return `interface ${name} {\n${props}\n}`;
+  }
+  if (type.kind === TypeKind.Array && type.elementType.kind === TypeKind.Object) {
+    const inner = formatTypeDefinition(type.elementType);
+    return `${inner}[]`;
+  }
+  const name = label ?? "(value)";
+  return `${name}: ${formatType(type)}`;
+}
+
 export function formatType(type: Type): string {
   switch (type.kind) {
     case TypeKind.String:
