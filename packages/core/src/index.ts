@@ -43,5 +43,5 @@ export {
   type TBooleanLiteral,
 } from "./types.js";
 export { typecheck, type Diagnostic } from "./checker.js";
-export { typeAtPosition, type HoverResult } from "./hover.js";
-export { resolveType } from "./resolver.js";
+export { typeAtPosition, completionsAtPosition, type HoverResult, type CompletionEntry } from "./hover.js";
+export { resolveType, listExportedTypes } from "./resolver.js";

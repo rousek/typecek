@@ -260,3 +260,164 @@ export function typeAtPosition(
 
   return undefined;
 }
+
+export interface CompletionEntry {
+  name: string;
+  type: Type;
+}
+
+/**
+ * Returns the properties available at a given position in the template,
+ * considering {{#with}} scopes and loop variables.
+ */
+export function completionsAtPosition(
+  ast: TemplateAST,
+  dataType: Type,
+  line: number,
+  column: number,
+): CompletionEntry[] {
+  const loopVarStack: Array<{ variable: string; type: Type }> = [];
+  const scopeStack: Type[] = [dataType];
+
+  function currentScope(): Type {
+    return scopeStack[scopeStack.length - 1];
+  }
+
+  function getProperties(type: Type): CompletionEntry[] {
+    if (type.kind === TypeKind.Object) {
+      return [...type.properties.entries()].map(([name, t]) => ({ name, type: t }));
+    }
+    if (type.kind === TypeKind.Union) {
+      for (const t of type.types) {
+        if (t.kind === TypeKind.Null || t.kind === TypeKind.Undefined) continue;
+        const props = getProperties(t);
+        if (props.length > 0) return props;
+      }
+    }
+    return [];
+  }
+
+  function resolveExprType(node: ExprNode): Type {
+    switch (node.type) {
+      case NodeType.Identifier: {
+        if (node.depth > 0) {
+          const idx = scopeStack.length - 1 - node.depth;
+          const scope = idx >= 0 ? scopeStack[idx] : dataType;
+          return resolveProperty(scope, node.name) ?? { kind: TypeKind.Any };
+        }
+        for (let i = loopVarStack.length - 1; i >= 0; i--) {
+          if (loopVarStack[i].variable === node.name) return loopVarStack[i].type;
+        }
+        return resolveProperty(currentScope(), node.name) ?? { kind: TypeKind.Any };
+      }
+      case NodeType.PropertyAccess: {
+        const objectType = resolveExprType(node.object);
+        return resolveProperty(objectType, node.property) ?? { kind: TypeKind.Any };
+      }
+      default:
+        return { kind: TypeKind.Any };
+    }
+  }
+
+  // Check if a line/column is within a node's block body range
+  function posAfterNode(node: { line: number; column: number }): boolean {
+    return line > node.line || (line === node.line && column > node.column);
+  }
+
+  function searchNode(node: ASTNode): CompletionEntry[] | null {
+    switch (node.type) {
+      case NodeType.ForBlock: {
+        const iterableType = resolveExprType(node.iterable);
+        const elementType = iterableType.kind === TypeKind.Array ? iterableType.elementType : { kind: TypeKind.Any as const };
+        loopVarStack.push({ variable: node.variable, type: elementType });
+        for (const child of node.body) {
+          const r = searchNode(child);
+          if (r) { loopVarStack.pop(); return r; }
+        }
+        if (node.emptyBlock) {
+          for (const child of node.emptyBlock) {
+            const r = searchNode(child);
+            if (r) { loopVarStack.pop(); return r; }
+          }
+        }
+        loopVarStack.pop();
+        return null;
+      }
+      case NodeType.WithBlock: {
+        const withType = resolveExprType(node.expression);
+        scopeStack.push(withType);
+        for (const child of node.body) {
+          const r = searchNode(child);
+          if (r) { scopeStack.pop(); return r; }
+        }
+        scopeStack.pop();
+        if (node.emptyBlock) {
+          for (const child of node.emptyBlock) {
+            const r = searchNode(child);
+            if (r) return r;
+          }
+        }
+        return null;
+      }
+      case NodeType.IfBlock: {
+        for (const child of node.consequent) {
+          const r = searchNode(child);
+          if (r) return r;
+        }
+        if (node.alternate) {
+          if (Array.isArray(node.alternate)) {
+            for (const child of node.alternate) {
+              const r = searchNode(child);
+              if (r) return r;
+            }
+          } else {
+            const r = searchNode(node.alternate);
+            if (r) return r;
+          }
+        }
+        return null;
+      }
+      case NodeType.SwitchBlock: {
+        for (const c of node.cases) {
+          for (const child of c.body) {
+            const r = searchNode(child);
+            if (r) return r;
+          }
+        }
+        if (node.defaultCase) {
+          for (const child of node.defaultCase) {
+            const r = searchNode(child);
+            if (r) return r;
+          }
+        }
+        return null;
+      }
+      case NodeType.Expression:
+      case NodeType.RawExpression:
+        if (node.line === line && posAfterNode(node)) {
+          // Build completions from current scope + loop vars
+          const entries = getProperties(currentScope());
+          for (let i = loopVarStack.length - 1; i >= 0; i--) {
+            entries.push({ name: loopVarStack[i].variable, type: loopVarStack[i].type });
+          }
+          return entries;
+        }
+        return null;
+      default:
+        return null;
+    }
+  }
+
+  // Walk the AST to find the scope at the position
+  for (const node of ast.body) {
+    const result = searchNode(node);
+    if (result) return result;
+  }
+
+  // Default: return root scope properties + loop vars
+  const entries = getProperties(currentScope());
+  for (let i = loopVarStack.length - 1; i >= 0; i--) {
+    entries.push({ name: loopVarStack[i].variable, type: loopVarStack[i].type });
+  }
+  return entries;
+}

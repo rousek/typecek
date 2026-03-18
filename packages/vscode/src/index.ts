@@ -4,12 +4,15 @@ import {
   ParseError,
   typecheck,
   resolveType,
+  listExportedTypes,
   typeAtPosition,
+  completionsAtPosition,
   formatTypeDefinition,
   formatType,
   TypeKind,
   type Type,
 } from "@typek/core";
+import fs from "fs";
 import path from "path";
 
 const TYPEK_LANGUAGES = ["typek", "typek-html", "typek-ts"];
@@ -65,6 +68,19 @@ export function activate(context: vscode.ExtensionContext): void {
         return getHover(document, position);
       },
     }),
+  );
+
+  // Completion provider
+  context.subscriptions.push(
+    vscode.languages.registerCompletionItemProvider(
+      TYPEK_SELECTORS,
+      {
+        provideCompletionItems(document, position) {
+          return getCompletions(document, position);
+        },
+      },
+      ".", "#", "/", '"', "'",
+    ),
   );
 }
 
@@ -202,6 +218,157 @@ function getHover(document: vscode.TextDocument, position: vscode.Position): vsc
 
   const range = new vscode.Range(result.line, result.column, result.line, result.column + result.length);
   return new vscode.Hover(markdown, range);
+}
+
+function getCompletions(document: vscode.TextDocument, position: vscode.Position): vscode.CompletionItem[] | undefined {
+  if (!isTypekDocument(document)) return undefined;
+
+  const lineText = document.lineAt(position.line).text;
+  const textBefore = lineText.slice(0, position.character);
+
+  // 1. Tag name completion after {{# or {{/
+  const blockMatch = textBefore.match(/\{\{#(\w*)$/);
+  if (blockMatch) {
+    const tags = ["if", "for", "with", "switch", "case", "default", "empty", "raw", "else"];
+    return tags.map((tag) => {
+      const item = new vscode.CompletionItem(tag, vscode.CompletionItemKind.Keyword);
+      const help = TAG_HELP[tag];
+      if (help) item.documentation = new vscode.MarkdownString(`\`${help.syntax}\`\n\n${help.description}`);
+      return item;
+    });
+  }
+  const closeMatch = textBefore.match(/\{\{\/(\w*)$/);
+  if (closeMatch) {
+    const tags = ["if", "for", "with", "switch", "case", "default", "empty", "raw"];
+    return tags.map((tag) => {
+      const item = new vscode.CompletionItem(tag, vscode.CompletionItemKind.Keyword);
+      return item;
+    });
+  }
+
+  // 2. Import path completion: {{#import TypeName from "... or '...
+  const importPathMatch = textBefore.match(/\{\{#import\s+\w+\s+from\s+["']([^"']*)$/);
+  if (importPathMatch) {
+    const partial = importPathMatch[1];
+    const templateDir = path.dirname(document.uri.fsPath);
+    const searchDir = partial.includes("/")
+      ? path.resolve(templateDir, partial.substring(0, partial.lastIndexOf("/") + 1))
+      : templateDir;
+
+    try {
+      const entries = fs.readdirSync(searchDir, { withFileTypes: true });
+      const items: vscode.CompletionItem[] = [];
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          const item = new vscode.CompletionItem(entry.name, vscode.CompletionItemKind.Folder);
+          item.insertText = entry.name + "/";
+          item.command = { title: "", command: "editor.action.triggerSuggest" };
+          items.push(item);
+        } else if (entry.name.endsWith(".ts") && !entry.name.endsWith(".d.ts")) {
+          const item = new vscode.CompletionItem(entry.name.replace(/\.ts$/, ""), vscode.CompletionItemKind.File);
+          items.push(item);
+        }
+      }
+      return items;
+    } catch {
+      return undefined;
+    }
+  }
+
+  // 3. Import type name completion: {{#import <cursor>
+  const importTypeMatch = textBefore.match(/\{\{#import\s+(\w*)$/);
+  if (importTypeMatch) {
+    // Look ahead for the from clause to find the file
+    const fullLine = lineText;
+    const fromMatch = fullLine.match(/from\s+["']([^"']+)["']/);
+    if (fromMatch) {
+      const templateDir = path.dirname(document.uri.fsPath);
+      const importPath = fromMatch[1];
+      const typeFilePath = path.resolve(templateDir, importPath.endsWith(".ts") ? importPath : importPath + ".ts");
+      try {
+        const names = listExportedTypes(typeFilePath);
+        return names.map((name) => {
+          const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Interface);
+          return item;
+        });
+      } catch {
+        return undefined;
+      }
+    }
+    return undefined;
+  }
+
+  // 4. Property completion inside expressions
+  const inExpr = textBefore.match(/\{\{~?\s*[^}]*$/) || textBefore.match(/\{\{#\w+\s+[^}]*$/);
+  if (!inExpr) return undefined;
+
+  const resolved = resolveDataType(document);
+  if (!resolved) return undefined;
+
+  // Check if completing after a dot (property access)
+  const dotMatch = textBefore.match(/(\w+(?:\.\w+)*)\.\s*(\w*)$/);
+  if (dotMatch) {
+    const chain = dotMatch[1].split(".");
+    let type = resolveChain(resolved.dataType, resolved.ast, chain, position.line);
+    if (!type) return undefined;
+    return getPropertyCompletions(type);
+  }
+
+  // Bare identifier completion
+  try {
+    const entries = completionsAtPosition(resolved.ast, resolved.dataType, position.line, position.character);
+    return entries.map((entry) => {
+      const item = new vscode.CompletionItem(entry.name, vscode.CompletionItemKind.Property);
+      item.detail = formatType(entry.type);
+      return item;
+    });
+  } catch {
+    return undefined;
+  }
+}
+
+function resolveChain(dataType: Type, ast: ReturnType<typeof parse>, chain: string[], _line: number): Type | undefined {
+  let type = dataType;
+  for (const name of chain) {
+    if (type.kind === TypeKind.Object) {
+      const prop = type.properties.get(name);
+      if (!prop) return undefined;
+      type = prop;
+    } else if (type.kind === TypeKind.Union) {
+      let found: Type | undefined;
+      for (const t of type.types) {
+        if (t.kind === TypeKind.Null || t.kind === TypeKind.Undefined) continue;
+        if (t.kind === TypeKind.Object) {
+          found = t.properties.get(name);
+          if (found) break;
+        }
+      }
+      if (!found) return undefined;
+      type = found;
+    } else if (type.kind === TypeKind.Any) {
+      return type;
+    } else {
+      return undefined;
+    }
+  }
+  return type;
+}
+
+function getPropertyCompletions(type: Type): vscode.CompletionItem[] {
+  const items: vscode.CompletionItem[] = [];
+  if (type.kind === TypeKind.Object) {
+    for (const [name, propType] of type.properties) {
+      const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Property);
+      item.detail = formatType(propType);
+      items.push(item);
+    }
+  } else if (type.kind === TypeKind.Union) {
+    for (const t of type.types) {
+      if (t.kind === TypeKind.Null || t.kind === TypeKind.Undefined) continue;
+      items.push(...getPropertyCompletions(t));
+    }
+  }
+  return items;
 }
 
 function checkDocument(document: vscode.TextDocument): void {

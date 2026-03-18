@@ -41,6 +41,32 @@ export function resolveType(filePath: string, typeName: string): Type {
   throw new Error(`Type '${typeName}' not found in '${filePath}'`);
 }
 
+/**
+ * Lists all exported interface and type alias names from a TypeScript source file.
+ */
+export function listExportedTypes(filePath: string): string[] {
+  const program = ts.createProgram([filePath], {
+    strict: true,
+    target: ts.ScriptTarget.ESNext,
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    noEmit: true,
+  });
+
+  const sourceFile = program.getSourceFile(filePath);
+  if (!sourceFile) return [];
+
+  const names: string[] = [];
+  for (const statement of sourceFile.statements) {
+    if (ts.isInterfaceDeclaration(statement)) {
+      names.push(statement.name.text);
+    } else if (ts.isTypeAliasDeclaration(statement)) {
+      names.push(statement.name.text);
+    }
+  }
+  return names;
+}
+
 function convertType(tsType: ts.Type, checker: ts.TypeChecker, seen: Set<number>): Type {
   const flags = tsType.getFlags();
 
