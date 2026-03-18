@@ -25,47 +25,47 @@
 
   <nav class="categories">
     {{#for cat in categories}}
-      <a href="#{{cat}}">{{cat}}</a>
+    <a href="#{{cat}}">{{cat}}</a>
     {{/for}}
   </nav>
 
   {{#with featuredProduct}}
-    <div class="product featured">
-      <h2>Featured: {{name}}</h2>
-      <img src="{{imageUrl}}" alt="{{name}}">
-      <p>{{description}}</p>
-      <span class="price">${{price}}</span>
-      <span class="rating">{{rating}}/5</span>
-    </div>
+  <div class="product featured">
+    <h2>Featured: {{name}}</h2>
+    <img src="{{imageUrl}}" alt="{{name}}">
+    <p>{{description}}</p>
+    <span class="price">${{price}}</span>
+    <span class="rating">{{rating}}/5</span>
+  </div>
   {{#empty}}
-    <p>No featured product at the moment.</p>
+  <p>No featured product at the moment.</p>
   {{/empty}}
   {{/with}}
 
   <h2>All Products</h2>
   <div class="products">
     {{#for product in products}}
-      <div class="product">
-        <img src="{{product.imageUrl}}" alt="{{product.name}}">
-        <h3>{{product.name}}</h3>
-        <p class="category">{{product.category}}</p>
-        <p>{{product.description}}</p>
-        <span class="price">${{product.price}}</span>
+    <div class="product">
+      <img src="{{product.imageUrl}}" alt="{{product.name}}">
+      <h3>{{product.name}}</h3>
+      <p class="category">{{product.category}}</p>
+      <p>{{product.description}}</p>
+      <span class="price">${{product.price}}</span>
 
-        {{#if product.inStock}}
-          <p>In Stock</p>
-        {{#else}}
-          <p class="out-of-stock">Out of Stock</p>
-        {{/if}}
+      {{#if product.inStock}}
+      <p>In Stock</p>
+      {{#else}}
+      <p class="out-of-stock">Out of Stock</p>
+      {{/if}}
 
-        <div>
-          {{#for tag in product.tags}}
-            <span class="tag">{{tag}}</span>
-          {{/for}}
-        </div>
+      <div>
+        {{#for tag in product.tags}}
+        <span class="tag">{{tag}}</span>
+        {{/for}}
       </div>
+    </div>
     {{#empty}}
-      <p>No products available yet. Check back soon!</p>
+    <p>No products available yet. Check back soon!</p>
     {{/empty}}
     {{/for}}
   </div>

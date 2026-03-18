@@ -26,9 +26,9 @@
 <body>
   <div class="profile-header">
     {{#if user.avatar}}
-      <img class="avatar" src="{{user.avatar}}" alt="{{user.name}}">
+    <img class="avatar" src="{{user.avatar}}" alt="{{user.name}}">
     {{#else}}
-      <div class="avatar"></div>
+    <div class="avatar"></div>
     {{/if}}
     <div>
       <h1>{{user.name}}</h1>
@@ -48,42 +48,50 @@
   </div>
 
   {{#with user.address}}
-    <h2>Shipping Address</h2>
-    <p>{{street}}<br>{{city}}, {{zip}}<br>{{country}}</p>
+  <h2>Shipping Address</h2>
+  <p>{{street}}<br>{{city}}, {{zip}}<br>{{country}}</p>
   {{/with}}
 
   <h2>Recent Orders</h2>
   {{#for order in recentOrders}}
-    <div class="order">
-      <div class="order-header">
-        <div>
-          <strong>Order #{{order.id}}</strong>
-          <span> — {{order.date}}</span>
-        </div>
-        <div>
-          {{#switch order.status}}
-            {{#case "pending"}}<span class="status status-pending">Pending</span>{{/case}}
-            {{#case "shipped"}}<span class="status status-shipped">Shipped</span>{{/case}}
-            {{#case "delivered"}}<span class="status status-delivered">Delivered</span>{{/case}}
-            {{#case "cancelled"}}<span class="status status-cancelled">Cancelled</span>{{/case}}
-          {{/switch}}
-        </div>
+  <div class="order">
+    <div class="order-header">
+      <div>
+        <strong>Order #{{order.id}}</strong>
+        <span> — {{order.date}}</span>
       </div>
-      <div class="order-items">
-        {{#for item in order.items}}
-          <div class="order-item">
-            <span>{{item.product.name}} x{{item.quantity}}</span>
-            <span>${{item.product.price * item.quantity}}</span>
-          </div>
-        {{/for}}
-      </div>
-      <div class="order-header" style="margin-top: 10px; border-top: 1px solid #eee; padding-top: 10px;">
-        <strong>Total</strong>
-        <strong>${{order.total}}</strong>
+      <div>
+        {{#switch order.status}}
+        {{#case "pending"}}
+        <span class="status status-pending">Pending</span>
+        {{/case}}
+        {{#case "shipped"}}
+        <span class="status status-shipped">Shipped</span>
+        {{/case}}
+        {{#case "delivered"}}
+        <span class="status status-delivered">Delivered</span>
+        {{/case}}
+        {{#case "cancelled"}}
+        <span class="status status-cancelled">Cancelled</span>
+        {{/case}}
+        {{/switch}}
       </div>
     </div>
+    <div class="order-items">
+      {{#for item in order.items}}
+      <div class="order-item">
+        <span>{{item.product.name}} x{{item.quantity}}</span>
+        <span>${{item.product.price * item.quantity}}</span>
+      </div>
+      {{/for}}
+    </div>
+    <div class="order-header" style="margin-top: 10px; border-top: 1px solid #eee; padding-top: 10px;">
+      <strong>Total</strong>
+      <strong>${{order.total}}</strong>
+    </div>
+  </div>
   {{#empty}}
-    <p>No orders yet.</p>
+  <p>No orders yet.</p>
   {{/empty}}
   {{/for}}
 </body>

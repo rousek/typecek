@@ -891,5 +891,115 @@ export function parse(template: string): TemplateAST {
     );
   }
 
+  stripStandaloneWhitespace(body);
+
   return { typeDirective, body };
+}
+
+// --- Standalone line stripping ---
+// Block tags (if, for, switch, with, comment) on their own line
+// should not emit surrounding whitespace/newline.
+
+function isBlockNode(node: ASTNode): boolean {
+  return (
+    node.type === NodeType.IfBlock ||
+    node.type === NodeType.ForBlock ||
+    node.type === NodeType.SwitchBlock ||
+    node.type === NodeType.WithBlock ||
+    node.type === NodeType.Comment
+  );
+}
+
+function getBlockBodies(node: ASTNode): ASTNode[][] {
+  switch (node.type) {
+    case NodeType.IfBlock: {
+      const bodies: ASTNode[][] = [node.consequent];
+      let alt: ASTNode[] | IfBlockNode | null = node.alternate;
+      while (alt) {
+        if (Array.isArray(alt)) {
+          bodies.push(alt);
+          break;
+        }
+        bodies.push(alt.consequent);
+        alt = alt.alternate;
+      }
+      return bodies;
+    }
+    case NodeType.ForBlock: {
+      const bodies: ASTNode[][] = [node.body];
+      if (node.emptyBlock) bodies.push(node.emptyBlock);
+      return bodies;
+    }
+    case NodeType.SwitchBlock: {
+      const bodies: ASTNode[][] = node.cases.map((c) => c.body);
+      if (node.defaultCase) bodies.push(node.defaultCase);
+      return bodies;
+    }
+    case NodeType.WithBlock: {
+      const bodies: ASTNode[][] = [node.body];
+      if (node.emptyBlock) bodies.push(node.emptyBlock);
+      return bodies;
+    }
+    default:
+      return [];
+  }
+}
+
+function stripStandaloneWhitespace(body: ASTNode[]): void {
+  // Step 1: Recurse into all nested bodies first
+  for (const node of body) {
+    if (isBlockNode(node)) {
+      for (const subBody of getBlockBodies(node)) {
+        stripStandaloneWhitespace(subBody);
+      }
+    }
+  }
+
+  // Step 2: Process standalone blocks in this body
+  for (let i = 0; i < body.length; i++) {
+    const node = body[i];
+    if (!isBlockNode(node)) continue;
+
+    const prev = i > 0 ? body[i - 1] : null;
+    const next = i < body.length - 1 ? body[i + 1] : null;
+
+    // Prev must end with newline+whitespace-only, or be absent/first
+    const prevOk =
+      !prev ||
+      (prev.type === NodeType.Text && /(^|\n)[ \t]*$/.test(prev.value));
+    // Next must start with a newline, or be absent/last
+    const nextOk =
+      !next || (next.type === NodeType.Text && /^\n/.test(next.value));
+
+    if (!prevOk || !nextOk) continue;
+
+    // Trim trailing indent from prev text
+    if (prev && prev.type === NodeType.Text) {
+      prev.value = prev.value.replace(/[ \t]*$/, "");
+    }
+    // Trim leading newline from next text
+    if (next && next.type === NodeType.Text) {
+      next.value = next.value.replace(/^\n/, "");
+    }
+
+    // Trim inner body boundaries (after opening tag / before closing tag)
+    for (const subBody of getBlockBodies(node)) {
+      if (subBody.length === 0) continue;
+      const first = subBody[0];
+      if (first.type === NodeType.Text) {
+        first.value = first.value.replace(/^\n/, "");
+      }
+      const last = subBody[subBody.length - 1];
+      if (last.type === NodeType.Text) {
+        last.value = last.value.replace(/[ \t]*$/, "");
+      }
+    }
+  }
+
+  // Step 3: Remove empty text nodes
+  for (let i = body.length - 1; i >= 0; i--) {
+    if (body[i].type === NodeType.Text && (body[i] as TextNode).value === "") {
+      body.splice(i, 1);
+    }
+  }
 }
