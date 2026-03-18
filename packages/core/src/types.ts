@@ -76,20 +76,34 @@ export type Type =
  * For named object types, renders as `interface Name { ... }`.
  * For other types, renders as `type: ...`.
  */
+function findSingleObjectType(type: Type): TObject | undefined {
+  if (type.kind === TypeKind.Object && type.properties.size > 0) return type;
+  if (type.kind === TypeKind.Array) return findSingleObjectType(type.elementType);
+  if (type.kind === TypeKind.Union) {
+    let found: TObject | undefined;
+    for (const t of type.types) {
+      const obj = findSingleObjectType(t);
+      if (obj) {
+        if (found) return undefined; // more than one object type
+        found = obj;
+      }
+    }
+    return found;
+  }
+  return undefined;
+}
+
 export function formatTypeDefinition(type: Type, label?: string): string {
-  if (type.kind === TypeKind.Object) {
-    const name = label ?? type.name ?? "(anonymous)";
-    const entries = [...type.properties.entries()];
-    if (entries.length === 0) return `interface ${name} {}`;
-    const props = entries.map(([k, v]) => `  ${k}: ${formatType(v)};`).join("\n");
-    return `interface ${name} {\n${props}\n}`;
-  }
-  if (type.kind === TypeKind.Array && type.elementType.kind === TypeKind.Object) {
-    const inner = formatTypeDefinition(type.elementType);
-    return `${inner}[]`;
-  }
   const name = label ?? "(value)";
-  return `${name}: ${formatType(type)}`;
+  const typeStr = formatType(type);
+
+  const obj = findSingleObjectType(type);
+  if (obj && obj.properties.size > 0) {
+    const props = [...obj.properties.entries()].map(([k, v]) => `  ${k}: ${formatType(v)};`).join("\n");
+    return `${name}: ${typeStr}\n\ninterface ${obj.name ?? name} {\n${props}\n}`;
+  }
+
+  return `${name}: ${typeStr}`;
 }
 
 export function formatType(type: Type): string {
@@ -109,13 +123,20 @@ export function formatType(type: Type): string {
     case TypeKind.Array:
       return `${formatType(type.elementType)}[]`;
     case TypeKind.Object: {
+      if (type.name) return type.name;
       const entries = [...type.properties.entries()];
       if (entries.length === 0) return "{}";
       const props = entries.map(([k, v]) => `${k}: ${formatType(v)}`).join("; ");
       return `{ ${props} }`;
     }
-    case TypeKind.Union:
-      return type.types.map(formatType).join(" | ");
+    case TypeKind.Union: {
+      const sorted = [...type.types].sort((a, b) => {
+        const aNullish = a.kind === TypeKind.Null || a.kind === TypeKind.Undefined ? 1 : 0;
+        const bNullish = b.kind === TypeKind.Null || b.kind === TypeKind.Undefined ? 1 : 0;
+        return aNullish - bNullish;
+      });
+      return sorted.map(formatType).join(" | ");
+    }
     case TypeKind.StringLiteral:
       return JSON.stringify(type.value);
     case TypeKind.NumberLiteral:
