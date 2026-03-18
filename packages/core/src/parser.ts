@@ -26,6 +26,7 @@ export enum NodeType {
   IfBlock,
   ForBlock,
   SwitchBlock,
+  WithBlock,
   Comment,
   Partial,
   MetaVariable,
@@ -57,6 +58,8 @@ export interface RawExpressionNode {
 export interface IdentifierNode {
   type: NodeType.Identifier;
   name: string;
+  /** Number of ../ prefixes — 0 means current scope, 1 means parent, etc. */
+  depth: number;
   line: number;
   column: number;
 }
@@ -130,6 +133,15 @@ export interface SwitchBlockNode {
   column: number;
 }
 
+export interface WithBlockNode {
+  type: NodeType.WithBlock;
+  expression: ExprNode;
+  body: ASTNode[];
+  emptyBlock: ASTNode[] | null;
+  line: number;
+  column: number;
+}
+
 export interface CommentNode {
   type: NodeType.Comment;
   value: string;
@@ -167,6 +179,7 @@ export type ASTNode =
   | IfBlockNode
   | ForBlockNode
   | SwitchBlockNode
+  | WithBlockNode
   | CommentNode
   | PartialNode
   | MetaVariableNode;
@@ -352,9 +365,29 @@ export function parse(template: string): TemplateAST {
       return { type: NodeType.StringLiteral, value: t.value, line: t.line, column: t.column };
     }
 
+    if (t.type === TokenType.DotDotSlash) {
+      let depth = 1;
+      const startToken = t;
+      pos++; // skip first ../
+      while (peekType() === TokenType.DotDotSlash) {
+        depth++;
+        pos++;
+      }
+      const ident = expect(TokenType.Identifier);
+      let node: ExprNode = { type: NodeType.Identifier, name: ident.value, depth, line: startToken.line, column: startToken.column };
+
+      while (peekType() === TokenType.Dot) {
+        pos++;
+        const prop = expect(TokenType.Identifier);
+        node = { type: NodeType.PropertyAccess, object: node, property: prop.value, line: startToken.line, column: startToken.column };
+      }
+
+      return node;
+    }
+
     if (t.type === TokenType.Identifier) {
       pos++;
-      let node: ExprNode = { type: NodeType.Identifier, name: t.value, line: t.line, column: t.column };
+      let node: ExprNode = { type: NodeType.Identifier, name: t.value, depth: 0, line: t.line, column: t.column };
 
       // Property access chain
       while (peekType() === TokenType.Dot) {
@@ -488,6 +521,9 @@ export function parse(template: string): TemplateAST {
             break;
           case "for":
             body.push(parseForBlock(t.line, t.column));
+            break;
+          case "with":
+            body.push(parseWithBlock(t.line, t.column));
             break;
           case "switch":
             body.push(parseSwitchBlock(t.line, t.column));
@@ -756,6 +792,63 @@ export function parse(template: string): TemplateAST {
       expression,
       cases,
       defaultCase,
+      line: blockLine,
+      column: blockColumn,
+    };
+  }
+
+  function parseWithBlock(blockLine = 0, blockColumn = 0): WithBlockNode {
+    const expression = collectExpressionTokens();
+    expect(TokenType.CloseExpression);
+
+    const body = parseBody(new Set(["empty"]));
+
+    let emptyBlock: ASTNode[] | null = null;
+
+    // Check for {{#empty}}
+    if (peekType() === TokenType.OpenBlock) {
+      const nextToken = tokens[pos + 1];
+      if (nextToken && nextToken.type === TokenType.BlockName && nextToken.value === "empty") {
+        pos++; // skip {{#
+        pos++; // skip "empty" BlockName
+        if (peekType() === TokenType.CloseExpression) pos++;
+
+        emptyBlock = parseBody(new Set());
+
+        // Expect {{/empty}}
+        if (peekType() === TokenType.CloseBlock) {
+          pos++; // skip {{/
+          const closeBlockName = expect(TokenType.BlockName);
+          if (closeBlockName.value !== "empty") {
+            throw new ParseError(`Expected {{/empty}} but got {{/${closeBlockName.value}}}`, closeBlockName.line, closeBlockName.column, closeBlockName.value.length);
+          }
+          expect(TokenType.CloseExpression);
+        }
+      }
+    }
+
+    // Skip whitespace-only text before {{/with}}
+    if (peekType() === TokenType.Text && current()!.value.trim() === "") {
+      pos++;
+    }
+
+    // Expect {{/with}}
+    if (peekType() === TokenType.CloseBlock) {
+      pos++; // skip {{/
+      const closeBlockName = expect(TokenType.BlockName);
+      if (closeBlockName.value !== "with") {
+        throw new ParseError(`Expected {{/with}} but got {{/${closeBlockName.value}}}`, closeBlockName.line, closeBlockName.column, closeBlockName.value.length);
+      }
+      expect(TokenType.CloseExpression);
+    } else {
+      throw new ParseError("Unclosed {{#with}} block — missing {{/with}}", blockLine, blockColumn, 7);
+    }
+
+    return {
+      type: NodeType.WithBlock,
+      expression,
+      body,
+      emptyBlock,
       line: blockLine,
       column: blockColumn,
     };

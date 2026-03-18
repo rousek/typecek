@@ -118,6 +118,10 @@ const TAG_HELP: Record<string, { syntax: string; description: string }> = {
     syntax: "{{#raw}}...{{/raw}}",
     description: "Content inside is output as-is without parsing template expressions.",
   },
+  "with": {
+    syntax: "{{#with expression}}...{{#empty}}...{{/empty}}{{/with}}",
+    description: "Scopes into a nested property. Inside the block, identifiers resolve against the expression's type. Use `../` to access the parent scope. Only renders if the value is truthy; use `{{#empty}}` for the fallback.",
+  },
 };
 
 function getTagHover(document: vscode.TextDocument, position: vscode.Position): vscode.Hover | undefined {

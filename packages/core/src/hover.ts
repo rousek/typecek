@@ -17,8 +17,10 @@ export interface HoverResult {
 
 function formatExpr(node: ExprNode): string {
   switch (node.type) {
-    case NodeType.Identifier:
-      return node.name;
+    case NodeType.Identifier: {
+      const prefix = "../".repeat(node.depth);
+      return prefix + node.name;
+    }
     case NodeType.PropertyAccess:
       return `${formatExpr(node.object)}.${node.property}`;
     case NodeType.BinaryExpression:
@@ -61,14 +63,28 @@ export function typeAtPosition(
   column: number,
 ): HoverResult | undefined {
   const loopVarStack: Array<{ variable: string; type: Type }> = [];
+  const scopeStack: Type[] = [dataType];
+
+  function currentScope(): Type {
+    return scopeStack[scopeStack.length - 1];
+  }
+
+  function scopeAtDepth(depth: number): Type {
+    const idx = scopeStack.length - 1 - depth;
+    return idx >= 0 ? scopeStack[idx] : dataType;
+  }
 
   function resolveExprType(node: ExprNode): Type {
     switch (node.type) {
       case NodeType.Identifier: {
+        if (node.depth > 0) {
+          const scope = scopeAtDepth(node.depth);
+          return resolveProperty(scope, node.name) ?? { kind: TypeKind.Any };
+        }
         for (let i = loopVarStack.length - 1; i >= 0; i--) {
           if (loopVarStack[i].variable === node.name) return loopVarStack[i].type;
         }
-        return resolveProperty(dataType, node.name) ?? { kind: TypeKind.Any };
+        return resolveProperty(currentScope(), node.name) ?? { kind: TypeKind.Any };
       }
       case NodeType.PropertyAccess: {
         const objectType = resolveExprType(node.object);
@@ -91,22 +107,15 @@ export function typeAtPosition(
     }
   }
 
-  // Find the most specific (deepest) expression node at the position.
-  // We check sub-expressions first so we get e.g. "user" rather than "user.name"
-  // when hovering the "user" part, but "user.name" when hovering "name".
   function findInExpr(node: ExprNode): HoverResult | undefined {
-    // Check children first for more specific matches
     if (node.type === NodeType.PropertyAccess) {
-      // Check if hovering the property name specifically
       const objText = formatExpr(node.object);
-      const propStart = node.column + objText.length + 1; // +1 for the dot
+      const propStart = node.column + objText.length + 1;
       if (line === node.line && column >= propStart && column < propStart + node.property.length) {
-        // Hovering the property — return the full chain's type
         const type = resolveExprType(node);
         const text = formatExpr(node);
         return { type, name: text, line: node.line, column: node.column, length: text.length };
       }
-      // Check if hovering the object part
       const objResult = findInExpr(node.object);
       if (objResult) return objResult;
     }
@@ -123,7 +132,6 @@ export function typeAtPosition(
       if (operandResult) return operandResult;
     }
 
-    // Check the node itself
     const text = formatExpr(node);
     if (nodeContains(node, text, line, column)) {
       const type = resolveExprType(node);
@@ -178,6 +186,26 @@ export function typeAtPosition(
           }
         }
         loopVarStack.pop();
+        return undefined;
+      }
+      case NodeType.WithBlock: {
+        const exprResult = findInExpr(node.expression);
+        if (exprResult) return exprResult;
+
+        const withType = resolveExprType(node.expression);
+        scopeStack.push(withType);
+
+        for (const child of node.body) {
+          const r = findInNode(child);
+          if (r) { scopeStack.pop(); return r; }
+        }
+        scopeStack.pop();
+        if (node.emptyBlock) {
+          for (const child of node.emptyBlock) {
+            const r = findInNode(child);
+            if (r) return r;
+          }
+        }
         return undefined;
       }
       case NodeType.SwitchBlock: {

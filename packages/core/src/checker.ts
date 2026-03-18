@@ -16,8 +16,10 @@ export interface Diagnostic {
 
 function formatExpr(node: ExprNode): string {
   switch (node.type) {
-    case NodeType.Identifier:
-      return node.name;
+    case NodeType.Identifier: {
+      const prefix = "../".repeat(node.depth);
+      return prefix + node.name;
+    }
     case NodeType.PropertyAccess:
       return `${formatExpr(node.object)}.${node.property}`;
     case NodeType.BinaryExpression:
@@ -79,6 +81,16 @@ function formatExpectedProps(type: Type): string {
 export function typecheck(ast: TemplateAST, dataType: Type): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
   const loopVarStack: Array<{ variable: string; type: Type }> = [];
+  const scopeStack: Type[] = [dataType];
+
+  function currentScope(): Type {
+    return scopeStack[scopeStack.length - 1];
+  }
+
+  function scopeAtDepth(depth: number): Type {
+    const idx = scopeStack.length - 1 - depth;
+    return idx >= 0 ? scopeStack[idx] : dataType;
+  }
 
   function error(message: string, node: ExprNode) {
     diagnostics.push({ message, severity: "error", line: node.line, column: node.column, length: exprLength(node) });
@@ -95,16 +107,27 @@ export function typecheck(ast: TemplateAST, dataType: Type): Diagnostic[] {
   function resolveExprType(node: ExprNode): Type {
     switch (node.type) {
       case NodeType.Identifier: {
+        // If depth > 0, resolve in parent scope (../ syntax)
+        if (node.depth > 0) {
+          const scope = scopeAtDepth(node.depth);
+          const resolved = resolveProperty(scope, node.name);
+          if (!resolved) {
+            error(`Property '${node.name}' does not exist on type ${describeType(scope)}${formatExpectedProps(scope)}`, node);
+            return { kind: TypeKind.Any };
+          }
+          return resolved;
+        }
         // Check loop variables first (innermost scope wins)
         for (let i = loopVarStack.length - 1; i >= 0; i--) {
           if (loopVarStack[i].variable === node.name) {
             return loopVarStack[i].type;
           }
         }
-        // Resolve from data type
-        const resolved = resolveProperty(dataType, node.name);
+        // Resolve from current scope
+        const scope = currentScope();
+        const resolved = resolveProperty(scope, node.name);
         if (!resolved) {
-          error(`Property '${node.name}' does not exist on type ${describeType(dataType)}${formatExpectedProps(dataType)}`, node);
+          error(`Property '${node.name}' does not exist on type ${describeType(scope)}${formatExpectedProps(scope)}`, node);
           return { kind: TypeKind.Any };
         }
         return resolved;
@@ -209,6 +232,15 @@ export function typecheck(ast: TemplateAST, dataType: Type): Diagnostic[] {
         }
         if (node.defaultCase) node.defaultCase.forEach(checkNode);
         break;
+
+      case NodeType.WithBlock: {
+        const withType = resolveExprType(node.expression);
+        scopeStack.push(withType);
+        node.body.forEach(checkNode);
+        scopeStack.pop();
+        if (node.emptyBlock) node.emptyBlock.forEach(checkNode);
+        break;
+      }
 
       case NodeType.Partial:
         for (const expr of Object.values(node.props)) {

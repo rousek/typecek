@@ -8,5 +8,7 @@
   </div>
   {{/raw}}
   <p>Age: {{age}}</p>
-  {{#dfdf}}
+  {{#with address}}
+    <p>Street: {{street}}</p>
+  {{/with}}
 </div>

@@ -54,8 +54,20 @@ export function compile(options: CompileOptions): CompileResult {
   }
 
   let loopCounter = 0;
+  let withCounter = 0;
   // Stack to track loop variable names for nested loops
   const loopVarStack: Array<{ variable: string; arrVar: string; indexVar: string }> = [];
+  // Stack to track scope variables for {{#with}} blocks
+  const scopeVarStack: string[] = ["data"];
+
+  function currentScopeVar(): string {
+    return scopeVarStack[scopeVarStack.length - 1];
+  }
+
+  function scopeVarAtDepth(depth: number): string {
+    const idx = scopeVarStack.length - 1 - depth;
+    return idx >= 0 ? scopeVarStack[idx] : "data";
+  }
 
   function isLoopVariable(name: string): boolean {
     return loopVarStack.some((l) => l.variable === name);
@@ -68,8 +80,9 @@ export function compile(options: CompileOptions): CompileResult {
   function compileExpr(node: ExprNode): string {
     switch (node.type) {
       case NodeType.Identifier:
+        if (node.depth > 0) return `${scopeVarAtDepth(node.depth)}.${node.name}`;
         if (isLoopVariable(node.name)) return node.name;
-        return `data.${node.name}`;
+        return `${currentScopeVar()}.${node.name}`;
       case NodeType.PropertyAccess:
         return `${compileExpr(node.object)}.${node.property}`;
       case NodeType.BinaryExpression:
@@ -109,6 +122,9 @@ export function compile(options: CompileOptions): CompileResult {
 
       case NodeType.SwitchBlock:
         return compileSwitchBlock(node);
+
+      case NodeType.WithBlock:
+        return compileWithBlock(node);
 
       case NodeType.Comment:
         return "";
@@ -192,6 +208,34 @@ export function compile(options: CompileOptions): CompileResult {
     }
 
     code += `}\n`;
+    return code;
+  }
+
+  function compileWithBlock(node: ASTNode): string {
+    if (node.type !== NodeType.WithBlock) return "";
+    const n = withCounter++;
+    const scopeVar = `__with_${n}`;
+
+    let code = `const ${scopeVar} = ${compileExpr(node.expression)};\n`;
+
+    if (node.emptyBlock) {
+      code += `if (${scopeVar}) {\n`;
+    } else {
+      code += `if (${scopeVar}) {\n`;
+    }
+
+    scopeVarStack.push(scopeVar);
+    code += compileBody(node.body);
+    scopeVarStack.pop();
+    code += `}`;
+
+    if (node.emptyBlock) {
+      code += ` else {\n`;
+      code += compileBody(node.emptyBlock);
+      code += `}`;
+    }
+
+    code += "\n";
     return code;
   }
 

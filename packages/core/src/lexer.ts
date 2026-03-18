@@ -35,6 +35,7 @@ export enum TokenType {
   OpenParen,
   CloseParen,
   WhitespaceStrip,
+  DotDotSlash,
 }
 
 export interface Token {
@@ -45,7 +46,7 @@ export interface Token {
 }
 
 const BLOCK_NAMES = new Set([
-  "if", "else", "for", "empty", "switch", "case", "default", "raw",
+  "if", "else", "for", "empty", "switch", "case", "default", "raw", "with",
 ]);
 
 const META_VARIABLES = new Set(["@index", "@first", "@last", "@length"]);
@@ -209,6 +210,9 @@ export function tokenize(template: string): Token[] {
       } else if (ch === ")") {
         emit(TokenType.CloseParen, ")", tokenStart);
         pos++;
+      } else if (ch === "." && template[pos + 1] === "." && template[pos + 2] === "/") {
+        emit(TokenType.DotDotSlash, "../", tokenStart);
+        pos += 3;
       } else if (ch === ".") {
         emit(TokenType.Dot, ".", tokenStart);
         pos++;
