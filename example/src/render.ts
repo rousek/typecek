@@ -2,10 +2,10 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-import { render as renderCart } from "@typek/templates/cart.html";
-import { render as renderEmail } from "@typek/templates/email.html";
-import { render as renderProfile } from "@typek/templates/profile.html";
-import { render as renderStore } from "@typek/templates/store.html";
+import renderCart from "@typek/render/cart.html";
+import renderEmail from "@typek/render/email.html";
+import renderProfile from "@typek/render/profile.html";
+import renderStore from "@typek/render/store.html";
 
 import { cartData, emailData, profileData, storeData } from "./data.js";
 

@@ -276,7 +276,7 @@ export function compile(options: CompileOptions): CompileResult {
   }
 
   code += `\n`;
-  code += `export function render(data: ${typeName}): string {\n`;
+  code += `export default function render(data: ${typeName}): string {\n`;
   code += `let __out = "";\n`;
   code += compileBody(ast.body);
   code += `return __out;\n`;

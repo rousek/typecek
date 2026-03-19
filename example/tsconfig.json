@@ -9,7 +9,7 @@
     "rootDir": ".",
     "paths": {
       "@typek/runtime": ["../packages/runtime/src/index.ts"],
-      "@typek/templates/*": ["./.typek/src/*"]
+      "@typek/render/*": ["./.typek/src/*"]
     }
   },
   "include": ["src/**/*.ts", ".typek/**/*.ts"]
