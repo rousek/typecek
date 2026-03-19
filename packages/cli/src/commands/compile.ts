@@ -1,6 +1,14 @@
 import fs from "fs";
 import path from "path";
 import { compile } from "@typek/compiler";
+import type { Diagnostic } from "@typek/core";
+
+// ANSI color helpers
+const red = (s: string) => `\x1b[31m${s}\x1b[0m`;
+const yellow = (s: string) => `\x1b[33m${s}\x1b[0m`;
+const cyan = (s: string) => `\x1b[36m${s}\x1b[0m`;
+const dim = (s: string) => `\x1b[2m${s}\x1b[0m`;
+const bold = (s: string) => `\x1b[1m${s}\x1b[0m`;
 
 export function findTsconfigRoot(): string {
   let dir = process.cwd();
@@ -53,6 +61,47 @@ function findTemplateFiles(dir: string): string[] {
   return results;
 }
 
+function formatDiagnostic(
+  diag: Diagnostic,
+  templatePath: string,
+  sourceLines: string[],
+): string {
+  const isError = diag.severity === "error";
+  const color = isError ? red : yellow;
+  const label = isError ? red("error") : yellow("warning");
+
+  // file:line:col — clickable in terminals
+  const location = cyan(`${templatePath}:${diag.line + 1}:${diag.column + 1}`);
+
+  let out = `\n${location} - ${label}${bold(":")} ${diag.message}\n`;
+
+  // Show the source line with underline
+  const sourceLine = sourceLines[diag.line];
+  if (sourceLine !== undefined) {
+    const lineNum = String(diag.line + 1);
+    const gutter = dim(`${lineNum} | `);
+    out += `${gutter}${sourceLine}\n`;
+
+    const underlineLen = Math.max(diag.length, 1);
+    const padding = " ".repeat(lineNum.length + 3 + diag.column);
+    out += `${padding}${color("~".repeat(underlineLen))}\n`;
+  }
+
+  return out;
+}
+
+function formatSimpleError(
+  message: string,
+  templatePath: string,
+  line?: number,
+  column?: number,
+): string {
+  const loc = line !== undefined
+    ? cyan(`${templatePath}:${line + 1}:${(column ?? 0) + 1}`)
+    : cyan(templatePath);
+  return `\n${loc} - ${red("error")}${bold(":")} ${message}\n`;
+}
+
 export function compileAll(checkOnly = false): void {
   const projectRoot = findTsconfigRoot();
   const sourceRoot = findSourceRoot(projectRoot);
@@ -76,6 +125,7 @@ export function compileAll(checkOnly = false): void {
 
     try {
       const template = fs.readFileSync(templatePath, "utf-8");
+      const sourceLines = template.split("\n");
       const result = compile({
         template,
         filename: path.basename(templatePath),
@@ -91,8 +141,7 @@ export function compileAll(checkOnly = false): void {
 
       if (result.diagnostics.length > 0) {
         for (const diag of result.diagnostics) {
-          const prefix = diag.severity === "error" ? "error" : "warning";
-          console.error(`  ${prefix} in ${relativePath}: ${diag.message}`);
+          console.error(formatDiagnostic(diag, relativePath, sourceLines));
           if (diag.severity === "error") errors++;
         }
       }
@@ -109,7 +158,10 @@ export function compileAll(checkOnly = false): void {
       }
     } catch (err) {
       errors++;
-      console.error(`  error in ${relativePath}: ${err instanceof Error ? err.message : err}`);
+      const message = err instanceof Error ? err.message : String(err);
+      // ParseError has line/column info
+      const parseErr = err as { line?: number; column?: number };
+      console.error(formatSimpleError(message, relativePath, parseErr.line, parseErr.column));
     }
   }
 
@@ -126,12 +178,16 @@ export function compileAll(checkOnly = false): void {
       const depInfo = compiledTemplates.get(resolvedDep);
       if (depInfo && !depInfo.isLayout) {
         errors++;
-        console.error(`  error in ${info.relativePath}: layout "${dep}" does not contain {{@content}}`);
+        console.error(formatSimpleError(
+          `layout "${dep}" does not contain {{@content}}`,
+          info.relativePath,
+        ));
       }
     }
   }
 
-  console.log(`\n${templateFiles.length} template(s), ${errors} error(s).`);
+  const errorSummary = errors > 0 ? red(`${errors} error(s)`) : `${errors} error(s)`;
+  console.log(`\n${templateFiles.length} template(s), ${errorSummary}.`);
 
   if (errors > 0) {
     process.exitCode = 1;
