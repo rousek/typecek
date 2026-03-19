@@ -74,7 +74,8 @@ export function typeAtPosition(
 
   function scopeAtDepth(depth: number): Type {
     const idx = scopeStack.length - 1 - depth;
-    return idx >= 0 ? scopeStack[idx] : dataType;
+    if (idx < 0) return dataType;
+    return scopeStack[idx];
   }
 
   function resolveExprPath(node: ExprNode): string[] {

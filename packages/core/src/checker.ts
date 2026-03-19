@@ -87,9 +87,10 @@ export function typecheck(ast: TemplateAST, dataType: Type): Diagnostic[] {
     return scopeStack[scopeStack.length - 1];
   }
 
-  function scopeAtDepth(depth: number): Type {
+  function scopeAtDepth(depth: number): Type | undefined {
     const idx = scopeStack.length - 1 - depth;
-    return idx >= 0 ? scopeStack[idx] : dataType;
+    if (idx < 0) return undefined;
+    return scopeStack[idx];
   }
 
   function error(message: string, node: ExprNode) {
@@ -110,6 +111,11 @@ export function typecheck(ast: TemplateAST, dataType: Type): Diagnostic[] {
         // If depth > 0, resolve in parent scope (../ syntax)
         if (node.depth > 0) {
           const scope = scopeAtDepth(node.depth);
+          if (!scope) {
+            const maxDepth = scopeStack.length - 1;
+            error(`'${"../".repeat(node.depth)}' goes ${node.depth} level(s) up, but only ${maxDepth} level(s) of scope exist`, node);
+            return { kind: TypeKind.Any };
+          }
           const resolved = resolveProperty(scope, node.name);
           if (!resolved) {
             error(`Property '${node.name}' does not exist on type ${describeType(scope)}${formatExpectedProps(scope)}`, node);

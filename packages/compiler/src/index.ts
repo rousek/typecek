@@ -66,7 +66,11 @@ export function compile(options: CompileOptions): CompileResult {
 
   function scopeVarAtDepth(depth: number): string {
     const idx = scopeVarStack.length - 1 - depth;
-    return idx >= 0 ? scopeVarStack[idx] : "data";
+    if (idx < 0) {
+      const maxDepth = scopeVarStack.length - 1;
+      throw new Error(`'${"../".repeat(depth)}' goes ${depth} level(s) up, but only ${maxDepth} level(s) of scope exist`);
+    }
+    return scopeVarStack[idx];
   }
 
   function isLoopVariable(name: string): boolean {
