@@ -5,6 +5,7 @@ import {
   typecheck,
   resolveType,
   listExportedTypes,
+  findDeclaration,
   typeAtPosition,
   completionsAtPosition,
   formatTypeDefinition,
@@ -66,6 +67,15 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.languages.registerHoverProvider(TYPEK_SELECTORS, {
       provideHover(document, position) {
         return getHover(document, position);
+      },
+    }),
+  );
+
+  // Definition provider (Go to Definition / Ctrl+Click)
+  context.subscriptions.push(
+    vscode.languages.registerDefinitionProvider(TYPEK_SELECTORS, {
+      provideDefinition(document, position) {
+        return getDefinition(document, position);
       },
     }),
   );
@@ -218,6 +228,27 @@ function getHover(document: vscode.TextDocument, position: vscode.Position): vsc
 
   const range = new vscode.Range(result.line, result.column, result.line, result.column + result.length);
   return new vscode.Hover(markdown, range);
+}
+
+function getDefinition(document: vscode.TextDocument, position: vscode.Position): vscode.Location | undefined {
+  if (!isTypekDocument(document)) return undefined;
+
+  const resolved = resolveDataType(document);
+  if (!resolved) return undefined;
+
+  const result = typeAtPosition(resolved.ast, resolved.dataType, position.line, position.character);
+  if (!result) return undefined;
+
+  const { typeName, from } = resolved.ast.typeDirective;
+  const templateDir = path.dirname(document.uri.fsPath);
+  const typeFilePath = path.resolve(templateDir, from.endsWith(".ts") ? from : from + ".ts");
+
+  const decl = findDeclaration(typeFilePath, typeName, result.propertyPath);
+  if (!decl) return undefined;
+
+  const uri = vscode.Uri.file(decl.filePath);
+  const pos = new vscode.Position(decl.line, decl.column);
+  return new vscode.Location(uri, pos);
 }
 
 function getCompletions(document: vscode.TextDocument, position: vscode.Position): vscode.CompletionItem[] | undefined {

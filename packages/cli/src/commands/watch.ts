@@ -16,7 +16,8 @@ export function watch(): void {
 
     const templatePath = path.join(sourceRoot, filename);
     const relativePath = filename;
-    const outputPath = path.join(typekDir, relativePath + ".ts");
+    const outputRelative = relativePath.replace(/\.tk$/, ".ts");
+    const outputPath = path.join(typekDir, outputRelative);
 
     // Handle deletion
     if (!fs.existsSync(templatePath)) {

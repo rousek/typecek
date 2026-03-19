@@ -95,15 +95,7 @@ function findSingleObjectType(type: Type): TObject | undefined {
 
 export function formatTypeDefinition(type: Type, label?: string): string {
   const name = label ?? "(value)";
-  const typeStr = formatType(type);
-
-  const obj = findSingleObjectType(type);
-  if (obj && obj.properties.size > 0) {
-    const props = [...obj.properties.entries()].map(([k, v]) => `  ${k}: ${formatType(v)};`).join("\n");
-    return `${name}: ${typeStr}\n\ninterface ${obj.name ?? name} {\n${props}\n}`;
-  }
-
-  return `${name}: ${typeStr}`;
+  return `${name}: ${formatType(type)}`;
 }
 
 export function formatType(type: Type): string {

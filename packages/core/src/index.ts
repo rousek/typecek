@@ -44,4 +44,4 @@ export {
 } from "./types.js";
 export { typecheck, type Diagnostic } from "./checker.js";
 export { typeAtPosition, completionsAtPosition, type HoverResult, type CompletionEntry } from "./hover.js";
-export { resolveType, listExportedTypes } from "./resolver.js";
+export { resolveType, listExportedTypes, findDeclaration, type DeclarationLocation } from "./resolver.js";

@@ -10,6 +10,8 @@ export interface HoverResult {
   type: Type;
   /** Display name of the expression being hovered (e.g. "user", "user.name") */
   name: string;
+  /** Property path from the root type for "Go to Definition" (e.g. ["user", "name"]) */
+  propertyPath: string[];
   line: number;
   column: number;
   length: number;
@@ -62,8 +64,9 @@ export function typeAtPosition(
   line: number,
   column: number,
 ): HoverResult | undefined {
-  const loopVarStack: Array<{ variable: string; type: Type }> = [];
+  const loopVarStack: Array<{ variable: string; type: Type; iterablePath: string[] }> = [];
   const scopeStack: Type[] = [dataType];
+  const scopePathStack: string[][] = [[]];
 
   function currentScope(): Type {
     return scopeStack[scopeStack.length - 1];
@@ -72,6 +75,29 @@ export function typeAtPosition(
   function scopeAtDepth(depth: number): Type {
     const idx = scopeStack.length - 1 - depth;
     return idx >= 0 ? scopeStack[idx] : dataType;
+  }
+
+  function resolveExprPath(node: ExprNode): string[] {
+    switch (node.type) {
+      case NodeType.Identifier: {
+        if (node.depth > 0) {
+          const idx = scopePathStack.length - 1 - node.depth;
+          const scopePath = idx >= 0 ? scopePathStack[idx] : [];
+          return [...scopePath, node.name];
+        }
+        for (let i = loopVarStack.length - 1; i >= 0; i--) {
+          if (loopVarStack[i].variable === node.name) return loopVarStack[i].iterablePath;
+        }
+        const scopePath = scopePathStack[scopePathStack.length - 1];
+        return [...scopePath, node.name];
+      }
+      case NodeType.PropertyAccess: {
+        const objPath = resolveExprPath(node.object);
+        return [...objPath, node.property];
+      }
+      default:
+        return [];
+    }
   }
 
   function resolveExprType(node: ExprNode): Type {
@@ -114,7 +140,7 @@ export function typeAtPosition(
       if (line === node.line && column >= propStart && column < propStart + node.property.length) {
         const type = resolveExprType(node);
         const text = formatExpr(node);
-        return { type, name: text, line: node.line, column: node.column, length: text.length };
+        return { type, name: text, propertyPath: resolveExprPath(node), line: node.line, column: node.column, length: text.length };
       }
       const objResult = findInExpr(node.object);
       if (objResult) return objResult;
@@ -135,7 +161,7 @@ export function typeAtPosition(
     const text = formatExpr(node);
     if (nodeContains(node, text, line, column)) {
       const type = resolveExprType(node);
-      return { type, name: text, line: node.line, column: node.column, length: text.length };
+      return { type, name: text, propertyPath: resolveExprPath(node), line: node.line, column: node.column, length: text.length };
     }
 
     return undefined;
@@ -173,6 +199,7 @@ export function typeAtPosition(
 
         const iterableType = resolveExprType(node.iterable);
         const elementType = iterableType.kind === TypeKind.Array ? iterableType.elementType : { kind: TypeKind.Any as const };
+        const iterablePath = resolveExprPath(node.iterable);
 
         // Check if hovering over the loop variable name in {{#for variable in ...}}
         if (
@@ -183,13 +210,14 @@ export function typeAtPosition(
           return {
             type: elementType,
             name: node.variable,
+            propertyPath: iterablePath,
             line: node.variableLine,
             column: node.variableColumn,
             length: node.variable.length,
           };
         }
 
-        loopVarStack.push({ variable: node.variable, type: elementType });
+        loopVarStack.push({ variable: node.variable, type: elementType, iterablePath });
 
         for (const child of node.body) {
           const r = findInNode(child);
@@ -209,13 +237,16 @@ export function typeAtPosition(
         if (exprResult) return exprResult;
 
         const withType = resolveExprType(node.expression);
+        const withPath = resolveExprPath(node.expression);
         scopeStack.push(withType);
+        scopePathStack.push(withPath);
 
         for (const child of node.body) {
           const r = findInNode(child);
-          if (r) { scopeStack.pop(); return r; }
+          if (r) { scopeStack.pop(); scopePathStack.pop(); return r; }
         }
         scopeStack.pop();
+        scopePathStack.pop();
         if (node.emptyBlock) {
           for (const child of node.emptyBlock) {
             const r = findInNode(child);
@@ -263,6 +294,7 @@ export function typeAtPosition(
     return {
       type: dataType,
       name: dir.typeName,
+      propertyPath: [],
       line: dir.typeNameLine,
       column: dir.typeNameColumn,
       length: dir.typeName.length,

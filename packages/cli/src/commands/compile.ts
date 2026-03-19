@@ -68,7 +68,8 @@ export function compileAll(checkOnly = false): void {
 
   for (const templatePath of templateFiles) {
     const relativePath = path.relative(sourceRoot, templatePath);
-    const outputPath = path.join(typekDir, relativePath + ".ts");
+    const outputRelative = relativePath.replace(/\.tk$/, ".ts");
+    const outputPath = path.join(typekDir, outputRelative);
 
     try {
       const template = fs.readFileSync(templatePath, "utf-8");

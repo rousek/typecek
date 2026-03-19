@@ -67,6 +67,83 @@ export function listExportedTypes(filePath: string): string[] {
   return names;
 }
 
+export interface DeclarationLocation {
+  filePath: string;
+  line: number;
+  column: number;
+}
+
+/**
+ * Finds the source declaration of a property path within a type.
+ * E.g. findDeclaration("types.ts", "StorePage", ["user", "name"])
+ * returns the location of the `name` property in the User interface.
+ */
+export function findDeclaration(
+  filePath: string,
+  typeName: string,
+  propertyPath: string[],
+): DeclarationLocation | undefined {
+  const program = ts.createProgram([filePath], {
+    strict: true,
+    target: ts.ScriptTarget.ESNext,
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    noEmit: true,
+  });
+
+  const sourceFile = program.getSourceFile(filePath);
+  if (!sourceFile) return undefined;
+
+  const checker = program.getTypeChecker();
+
+  for (const statement of sourceFile.statements) {
+    if (
+      (ts.isInterfaceDeclaration(statement) || ts.isTypeAliasDeclaration(statement)) &&
+      statement.name.text === typeName
+    ) {
+      // No property path — go to the type declaration itself
+      if (propertyPath.length === 0) {
+        const pos = sourceFile.getLineAndCharacterOfPosition(statement.name.getStart());
+        return { filePath, line: pos.line, column: pos.character };
+      }
+
+      let tsType = checker.getTypeAtLocation(statement.name);
+      let declaration: ts.Declaration | undefined;
+
+      for (const propName of propertyPath) {
+        // Unwrap unions to find the object type
+        if (tsType.isUnion()) {
+          for (const t of tsType.types) {
+            if (!(t.flags & (ts.TypeFlags.Null | ts.TypeFlags.Undefined))) {
+              tsType = t;
+              break;
+            }
+          }
+        }
+        // Unwrap arrays to get element type
+        if (checker.isArrayType(tsType)) {
+          const typeArgs = checker.getTypeArguments(tsType as ts.TypeReference);
+          if (typeArgs[0]) tsType = typeArgs[0];
+        }
+
+        const prop = tsType.getProperty(propName);
+        if (!prop) return undefined;
+        declaration = prop.valueDeclaration ?? prop.declarations?.[0];
+        if (!declaration) return undefined;
+        tsType = checker.getTypeOfSymbolAtLocation(prop, declaration);
+      }
+
+      if (declaration) {
+        const declSourceFile = declaration.getSourceFile();
+        const pos = declSourceFile.getLineAndCharacterOfPosition(declaration.getStart());
+        return { filePath: declSourceFile.fileName, line: pos.line, column: pos.character };
+      }
+    }
+  }
+
+  return undefined;
+}
+
 function convertType(tsType: ts.Type, checker: ts.TypeChecker, seen: Set<number>): Type {
   const flags = tsType.getFlags();
 
