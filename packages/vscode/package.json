@@ -47,6 +47,43 @@
         "configuration": "./language-configuration.json"
       }
     ],
+    "configuration": {
+      "title": "Typek",
+      "properties": {
+        "typek.typecheck.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable real-time type checking of templates."
+        },
+        "typek.typecheck.debounce": {
+          "type": "number",
+          "default": 200,
+          "minimum": 0,
+          "maximum": 5000,
+          "description": "Delay in milliseconds before re-checking a template after editing."
+        },
+        "typek.completions.snippets": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show snippet completions for block tags (e.g. {{#if ...}}...{{/if}})."
+        },
+        "typek.completions.properties": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show property completions based on the imported type."
+        },
+        "typek.hover.tagHelp": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show syntax help when hovering over template tags."
+        },
+        "typek.hover.typeInfo": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show type information when hovering over expressions."
+        }
+      }
+    },
     "grammars": [
       {
         "language": "typek-html",

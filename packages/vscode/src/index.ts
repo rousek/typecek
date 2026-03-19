@@ -21,6 +21,27 @@ const TYPEK_SELECTORS: vscode.DocumentSelector = TYPEK_LANGUAGES.map((lang) => (
 
 let diagnosticCollection: vscode.DiagnosticCollection;
 
+interface TypekConfig {
+  typecheckEnabled: boolean;
+  typecheckDebounce: number;
+  snippetsEnabled: boolean;
+  propertyCompletions: boolean;
+  tagHelpHover: boolean;
+  typeInfoHover: boolean;
+}
+
+function getConfig(): TypekConfig {
+  const cfg = vscode.workspace.getConfiguration("typek");
+  return {
+    typecheckEnabled: cfg.get<boolean>("typecheck.enabled", true),
+    typecheckDebounce: cfg.get<number>("typecheck.debounce", 200),
+    snippetsEnabled: cfg.get<boolean>("completions.snippets", false),
+    propertyCompletions: cfg.get<boolean>("completions.properties", true),
+    tagHelpHover: cfg.get<boolean>("hover.tagHelp", true),
+    typeInfoHover: cfg.get<boolean>("hover.typeInfo", true),
+  };
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   diagnosticCollection = vscode.languages.createDiagnosticCollection("typek");
   context.subscriptions.push(diagnosticCollection);
@@ -49,9 +70,10 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.workspace.onDidChangeTextDocument((event) => {
       if (debounceTimer) clearTimeout(debounceTimer);
+      const delay = getConfig().typecheckDebounce;
       debounceTimer = setTimeout(() => {
         checkDocument(event.document);
-      }, 200);
+      }, delay);
     }),
   );
 
@@ -89,7 +111,7 @@ export function activate(context: vscode.ExtensionContext): void {
           return getCompletions(document, position);
         },
       },
-      ".", "#", "/", '"', "'",
+      ".", "#", "/", ">", '"', "'",
     ),
   );
 }
@@ -231,10 +253,15 @@ function getTagHover(document: vscode.TextDocument, position: vscode.Position): 
 
 function getHover(document: vscode.TextDocument, position: vscode.Position): vscode.Hover | undefined {
   if (!isTypekDocument(document)) return undefined;
+  const config = getConfig();
 
   // Check tag help first (no parsing needed)
-  const tagHover = getTagHover(document, position);
-  if (tagHover) return tagHover;
+  if (config.tagHelpHover) {
+    const tagHover = getTagHover(document, position);
+    if (tagHover) return tagHover;
+  }
+
+  if (!config.typeInfoHover) return undefined;
 
   const resolved = resolveDataType(document);
   if (!resolved) return undefined;
@@ -319,16 +346,47 @@ function getCompletions(document: vscode.TextDocument, position: vscode.Position
   const lineText = document.lineAt(position.line).text;
   const textBefore = lineText.slice(0, position.character);
 
+  const config = getConfig();
+
   // 1. Tag name completion after {{# or {{/
   const blockMatch = textBefore.match(/\{\{#(\w*)$/);
   if (blockMatch) {
+    const items: vscode.CompletionItem[] = [];
+
+    // Snippet completions for block tags
+    const snippets: Array<{ label: string; snippet: string; doc: string }> = [
+      { label: "if", snippet: "if ${1:condition}}}$0{{/if}}", doc: "Conditionally renders content." },
+      { label: "if...else", snippet: "if ${1:condition}}}$0{{#else}}{{/if}}", doc: "Conditional with else branch." },
+      { label: "for", snippet: "for ${1:item} in ${2:collection}}}$0{{/for}}", doc: "Iterates over an array." },
+      { label: "for...empty", snippet: "for ${1:item} in ${2:collection}}}$0{{#empty}}{{/empty}}{{/for}}", doc: "Loop with empty fallback." },
+      { label: "with", snippet: "with ${1:expression}}}$0{{/with}}", doc: "Scopes into a nested property." },
+      { label: "with...empty", snippet: "with ${1:expression}}}$0{{#empty}}{{/empty}}{{/with}}", doc: "Scope with empty fallback." },
+      { label: "switch", snippet: "switch ${1:expression}}}{{#case \"${2:value}\"}}$0{{/case}}{{/switch}}", doc: "Matches expression against string cases." },
+      { label: "layout", snippet: "layout \"${1:./layout.html.tk}\" ${2:data}}}$0{{/layout}}", doc: "Wraps content with a layout template." },
+      { label: "import", snippet: "import ${1:Type} from \"${2:./types}\"}}", doc: "Import a TypeScript type for type checking." },
+    ];
+
+    if (config.snippetsEnabled) {
+      for (const s of snippets) {
+        const item = new vscode.CompletionItem(s.label, vscode.CompletionItemKind.Snippet);
+        item.insertText = new vscode.SnippetString(s.snippet);
+        item.documentation = new vscode.MarkdownString(s.doc);
+        item.sortText = `0_${s.label}`; // sort snippets before plain keywords
+        items.push(item);
+      }
+    }
+
+    // Plain keyword completions (for when user just wants the tag name)
     const tags = ["if", "for", "with", "switch", "case", "default", "empty", "raw", "else", "layout"];
-    return tags.map((tag) => {
+    for (const tag of tags) {
       const item = new vscode.CompletionItem(tag, vscode.CompletionItemKind.Keyword);
       const help = TAG_HELP[tag];
       if (help) item.documentation = new vscode.MarkdownString(`\`${help.syntax}\`\n\n${help.description}`);
-      return item;
-    });
+      item.sortText = `1_${tag}`; // sort after snippets
+      items.push(item);
+    }
+
+    return items;
   }
   const closeMatch = textBefore.match(/\{\{\/(\w*)$/);
   if (closeMatch) {
@@ -339,7 +397,18 @@ function getCompletions(document: vscode.TextDocument, position: vscode.Position
     });
   }
 
-  // 2. Import path completion: {{#import TypeName from "... or '...
+  // 2. Partial snippet after {{>
+  if (config.snippetsEnabled) {
+    const partialMatch = textBefore.match(/\{\{>\s*$/);
+    if (partialMatch) {
+      const item = new vscode.CompletionItem("partial", vscode.CompletionItemKind.Snippet);
+      item.insertText = new vscode.SnippetString(" \"${1:./partial.html.tk}\" ${2:data}}}");
+      item.documentation = new vscode.MarkdownString("Renders a partial template inline.");
+      return [item];
+    }
+  }
+
+  // 3. Import path completion: {{#import TypeName from "... or '...
   const importPathMatch = textBefore.match(/\{\{#import\s+\w+\s+from\s+["']([^"']*)$/);
   if (importPathMatch) {
     const partial = importPathMatch[1];
@@ -368,7 +437,7 @@ function getCompletions(document: vscode.TextDocument, position: vscode.Position
     }
   }
 
-  // 3. Import type name completion: {{#import <cursor>
+  // 4. Import type name completion: {{#import <cursor>
   const importTypeMatch = textBefore.match(/\{\{#import\s+(\w*)$/);
   if (importTypeMatch) {
     // Look ahead for the from clause to find the file
@@ -391,7 +460,9 @@ function getCompletions(document: vscode.TextDocument, position: vscode.Position
     return undefined;
   }
 
-  // 4. Property completion inside expressions
+  // 5. Property completion inside expressions
+  if (!config.propertyCompletions) return undefined;
+
   const inExpr = textBefore.match(/\{\{~?\s*[^}]*$/) || textBefore.match(/\{\{#\w+\s+[^}]*$/);
   if (!inExpr) return undefined;
 
@@ -466,6 +537,11 @@ function getPropertyCompletions(type: Type): vscode.CompletionItem[] {
 
 function checkDocument(document: vscode.TextDocument): void {
   if (!isTypekDocument(document)) return;
+
+  if (!getConfig().typecheckEnabled) {
+    diagnosticCollection.delete(document.uri);
+    return;
+  }
 
   const template = document.getText();
   const diagnostics: vscode.Diagnostic[] = [];
