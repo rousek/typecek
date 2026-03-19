@@ -1,10 +1,14 @@
+import fs from "fs";
+import path from "path";
 import {
+  parse,
   NodeType,
   type ASTNode,
   type ExprNode,
   type TemplateAST,
 } from "./parser.js";
 import { TypeKind, formatType, type Type } from "./types.js";
+import { resolveType } from "./resolver.js";
 
 export interface Diagnostic {
   message: string;
@@ -78,7 +82,103 @@ function formatExpectedProps(type: Type): string {
   return `. Expected: ${names.join(", ")}`;
 }
 
-export function typecheck(ast: TemplateAST, dataType: Type): Diagnostic[] {
+/** Check if `source` type is structurally assignable to `target` type */
+function isAssignable(source: Type, target: Type): boolean {
+  if (target.kind === TypeKind.Any || source.kind === TypeKind.Any) return true;
+
+  // Same primitive kinds
+  if (target.kind === TypeKind.String && source.kind === TypeKind.String) return true;
+  if (target.kind === TypeKind.Number && source.kind === TypeKind.Number) return true;
+  if (target.kind === TypeKind.Boolean && source.kind === TypeKind.Boolean) return true;
+  if (target.kind === TypeKind.Null && source.kind === TypeKind.Null) return true;
+  if (target.kind === TypeKind.Undefined && source.kind === TypeKind.Undefined) return true;
+
+  // String literal assignable to string
+  if (target.kind === TypeKind.String && source.kind === TypeKind.StringLiteral) return true;
+  if (target.kind === TypeKind.StringLiteral && source.kind === TypeKind.StringLiteral) return source.value === target.value;
+  // Number literal assignable to number
+  if (target.kind === TypeKind.Number && source.kind === TypeKind.NumberLiteral) return true;
+  if (target.kind === TypeKind.NumberLiteral && source.kind === TypeKind.NumberLiteral) return source.value === target.value;
+  // Boolean literal assignable to boolean
+  if (target.kind === TypeKind.Boolean && (source.kind === TypeKind.BooleanLiteral || source.kind === TypeKind.Boolean)) return true;
+  if (target.kind === TypeKind.BooleanLiteral && source.kind === TypeKind.BooleanLiteral) return source.value === target.value;
+
+  // Array: element type must be assignable
+  if (target.kind === TypeKind.Array && source.kind === TypeKind.Array) {
+    return isAssignable(source.elementType, target.elementType);
+  }
+
+  // Union target: source must be assignable to at least one member
+  if (target.kind === TypeKind.Union) {
+    // If source is also a union, every member must be assignable to the target union
+    if (source.kind === TypeKind.Union) {
+      return source.types.every(st => target.types.some(tt => isAssignable(st, tt)));
+    }
+    return target.types.some(t => isAssignable(source, t));
+  }
+
+  // Source is union: every member must be assignable to target
+  if (source.kind === TypeKind.Union) {
+    return source.types.every(t => isAssignable(t, target));
+  }
+
+  // Object: source must have all target properties with compatible types
+  if (target.kind === TypeKind.Object && source.kind === TypeKind.Object) {
+    for (const [key, targetPropType] of target.properties) {
+      const sourcePropType = source.properties.get(key);
+      if (!sourcePropType) return false;
+      if (!isAssignable(sourcePropType, targetPropType)) return false;
+    }
+    return true;
+  }
+
+  return false;
+}
+
+interface TemplateTypeResult {
+  /** Whether the target template accepts data (has {{#import}}) */
+  acceptsData: boolean;
+  /** The resolved type and name, if data is accepted */
+  type?: Type;
+  typeName?: string;
+}
+
+/** Resolve the expected data type of a referenced template (.tk file) */
+function resolveTemplateType(templateDir: string, refPath: string): TemplateTypeResult | undefined {
+  const fullPath = path.resolve(templateDir, refPath.endsWith(".tk") ? refPath : refPath + ".tk");
+  let template: string;
+  try {
+    template = fs.readFileSync(fullPath, "utf-8");
+  } catch {
+    return undefined;
+  }
+
+  let ast;
+  try {
+    ast = parse(template);
+  } catch {
+    return undefined;
+  }
+
+  const dir = ast.typeDirective;
+  if (!dir) return { acceptsData: false };
+
+  const typeFileDir = path.dirname(fullPath);
+  const typeFilePath = path.resolve(typeFileDir, dir.from.endsWith(".ts") ? dir.from : dir.from + ".ts");
+  try {
+    const type = resolveType(typeFilePath, dir.typeName);
+    return { acceptsData: true, type, typeName: dir.typeName };
+  } catch {
+    return undefined;
+  }
+}
+
+export interface TypecheckContext {
+  /** Absolute directory of the template being checked (for resolving relative paths) */
+  templateDir: string;
+}
+
+export function typecheck(ast: TemplateAST, dataType: Type, context?: TypecheckContext): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
   const loopVarStack: Array<{ variable: string; type: Type }> = [];
   const scopeStack: Type[] = [dataType];
@@ -248,14 +348,76 @@ export function typecheck(ast: TemplateAST, dataType: Type): Diagnostic[] {
         break;
       }
 
-      case NodeType.Partial:
-        resolveExprType(node.dataExpr);
+      case NodeType.Partial: {
+        const passedType = node.dataExpr ? resolveExprType(node.dataExpr) : undefined;
+        if (context) {
+          const target = resolveTemplateType(context.templateDir, node.path);
+          if (target) {
+            if (passedType && !target.acceptsData) {
+              diagnostics.push({
+                message: `Partial '${node.path}' does not accept data (no {{#import}} directive)`,
+                severity: "error",
+                line: node.dataExpr!.line,
+                column: node.dataExpr!.column,
+                length: exprLength(node.dataExpr!),
+              });
+            } else if (passedType && target.acceptsData && target.type && !isAssignable(passedType, target.type)) {
+              diagnostics.push({
+                message: `Type '${formatType(passedType)}' is not assignable to partial's expected type '${target.typeName}'`,
+                severity: "error",
+                line: node.dataExpr!.line,
+                column: node.dataExpr!.column,
+                length: exprLength(node.dataExpr!),
+              });
+            } else if (!passedType && target.acceptsData) {
+              diagnostics.push({
+                message: `Partial '${node.path}' expects data of type '${target.typeName}', but no data was passed`,
+                severity: "error",
+                line: node.line,
+                column: node.column,
+                length: node.path.length,
+              });
+            }
+          }
+        }
         break;
+      }
 
-      case NodeType.LayoutBlock:
-        resolveExprType(node.dataExpr);
+      case NodeType.LayoutBlock: {
+        const passedType = node.dataExpr ? resolveExprType(node.dataExpr) : undefined;
+        if (context) {
+          const target = resolveTemplateType(context.templateDir, node.path);
+          if (target) {
+            if (passedType && !target.acceptsData) {
+              diagnostics.push({
+                message: `Layout '${node.path}' does not accept data (no {{#import}} directive)`,
+                severity: "error",
+                line: node.dataExpr!.line,
+                column: node.dataExpr!.column,
+                length: exprLength(node.dataExpr!),
+              });
+            } else if (passedType && target.acceptsData && target.type && !isAssignable(passedType, target.type)) {
+              diagnostics.push({
+                message: `Type '${formatType(passedType)}' is not assignable to layout's expected type '${target.typeName}'`,
+                severity: "error",
+                line: node.dataExpr!.line,
+                column: node.dataExpr!.column,
+                length: exprLength(node.dataExpr!),
+              });
+            } else if (!passedType && target.acceptsData) {
+              diagnostics.push({
+                message: `Layout '${node.path}' expects data of type '${target.typeName}', but no data was passed`,
+                severity: "error",
+                line: node.line,
+                column: node.column,
+                length: node.path.length,
+              });
+            }
+          }
+        }
         node.body.forEach(checkNode);
         break;
+      }
 
       // Text, Comment, MetaVariable, Content — no type checking needed
       default:

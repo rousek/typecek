@@ -44,6 +44,6 @@ export {
   type TNumberLiteral,
   type TBooleanLiteral,
 } from "./types.js";
-export { typecheck, type Diagnostic } from "./checker.js";
+export { typecheck, type Diagnostic, type TypecheckContext } from "./checker.js";
 export { typeAtPosition, completionsAtPosition, type HoverResult, type CompletionEntry } from "./hover.js";
 export { resolveType, listExportedTypes, findDeclaration, type DeclarationLocation } from "./resolver.js";

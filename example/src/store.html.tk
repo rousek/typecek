@@ -38,7 +38,7 @@
 <h2>All Products</h2>
 <div class="products">
   {{#for product in products}}
-  {{> "./product-card.html.tk" product}}
+  {{> "./product-card.html.tk" product }}
   {{#empty}}
   <p>No products available yet. Check back soon!</p>
   {{/empty}}

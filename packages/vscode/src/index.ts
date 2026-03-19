@@ -101,6 +101,7 @@ function isTypekDocument(document: vscode.TextDocument): boolean {
 function resolveDataType(document: vscode.TextDocument): { ast: ReturnType<typeof parse>; dataType: Type } | undefined {
   try {
     const ast = parse(document.getText());
+    if (!ast.typeDirective) return undefined;
     const { typeName, from } = ast.typeDirective;
     const templateDir = path.dirname(document.uri.fsPath);
     const typeFilePath = path.resolve(templateDir, from.endsWith(".ts") ? from : from + ".ts");
@@ -429,7 +430,15 @@ function checkDocument(document: vscode.TextDocument): void {
 
   try {
     const ast = parse(template);
-    const { typeName, from } = ast.typeDirective;
+    const dir = ast.typeDirective;
+
+    if (!dir) {
+      // No type directive — no type checking possible
+      diagnosticCollection.set(document.uri, diagnostics);
+      return;
+    }
+
+    const { typeName, from } = dir;
 
     // Resolve the type file path relative to the template
     const templateDir = path.dirname(document.uri.fsPath);
@@ -437,7 +446,7 @@ function checkDocument(document: vscode.TextDocument): void {
 
     try {
       const dataType = resolveType(typeFilePath, typeName);
-      const checkerDiags = typecheck(ast, dataType);
+      const checkerDiags = typecheck(ast, dataType, { templateDir });
 
       for (const diag of checkerDiags) {
         const range = new vscode.Range(diag.line, diag.column, diag.line, diag.column + diag.length);

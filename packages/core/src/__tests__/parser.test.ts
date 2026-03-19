@@ -23,8 +23,9 @@ describe("parser", () => {
       ).toThrow();
     });
 
-    it("errors if type directive is missing", () => {
-      expect(() => parse("<div>{{name}}</div>")).toThrow();
+    it("allows missing type directive", () => {
+      const ast = parse("<div>hello</div>");
+      expect(ast.typeDirective).toBeNull();
     });
   });
 
@@ -272,20 +273,19 @@ describe("parser", () => {
   });
 
   describe("partials", () => {
-    it("parses partial without props", () => {
-      const ast = parse('{{#import T from "./t"}}\n{{> header}}');
+    it("parses partial without data", () => {
+      const ast = parse('{{#import T from "./t"}}\n{{> "./header.html.tk"}}');
       const partial = ast.body.find((n) => n.type === NodeType.Partial);
       expect(partial).toBeDefined();
-      expect(partial!.name).toBe("header");
-      expect(partial!.props).toEqual({});
+      expect(partial!.path).toBe("./header.html.tk");
+      expect(partial!.dataExpr).toBeNull();
     });
 
-    it("parses partial with props", () => {
-      const ast = parse('{{#import T from "./t"}}\n{{> header title=page.title active=isActive}}');
+    it("parses partial with data expression", () => {
+      const ast = parse('{{#import T from "./t"}}\n{{> "./header.html.tk" page}}');
       const partial = ast.body.find((n) => n.type === NodeType.Partial);
-      expect(partial!.name).toBe("header");
-      expect(Object.keys(partial!.props)).toContain("title");
-      expect(Object.keys(partial!.props)).toContain("active");
+      expect(partial!.path).toBe("./header.html.tk");
+      expect(partial!.dataExpr).toBeDefined();
     });
   });
 

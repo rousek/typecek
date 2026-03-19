@@ -88,11 +88,11 @@ describe("cli", () => {
       vi.spyOn(console, "log").mockImplementation(() => {});
       main(["compile"]);
 
-      const outputPath = path.join(tmpDir, ".typek", "test.html.tk.ts");
+      const outputPath = path.join(tmpDir, ".typek", "test.html.ts");
       expect(fs.existsSync(outputPath)).toBe(true);
 
       const output = fs.readFileSync(outputPath, "utf-8");
-      expect(output).toContain("export function render");
+      expect(output).toContain("export default function render");
       expect(output).toContain("User");
     });
 
@@ -117,7 +117,7 @@ describe("cli", () => {
       vi.spyOn(console, "log").mockImplementation(() => {});
       main(["check"]);
 
-      const outputPath = path.join(tmpDir, ".typek", "test.html.tk.ts");
+      const outputPath = path.join(tmpDir, ".typek", "test.html.ts");
       expect(fs.existsSync(outputPath)).toBe(false);
     });
   });

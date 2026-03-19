@@ -8,7 +8,7 @@ describe("compiler", () => {
         template: '{{#import User from "./types"}}\n<h1>{{name}}</h1>',
         filename: "greeting.html.tk",
       });
-      expect(result.code).toContain("export function render");
+      expect(result.code).toContain("export default function render");
       expect(result.code).toContain('import type { User } from');
     });
 
@@ -173,11 +173,11 @@ describe("compiler", () => {
   describe("partials", () => {
     it("compiles partial invocation to function call", () => {
       const result = compile({
-        template: '{{#import T from "./t"}}\n{{> header title=page.title}}',
+        template: '{{#import T from "./t"}}\n{{> "./header.html.tk" page}}',
         filename: "test.html.tk",
       });
-      expect(result.code).toContain("header");
-      expect(result.code).toContain("render");
+      expect(result.code).toContain("__partial_0");
+      expect(result.code).toContain("import __partial_0");
     });
   });
 });

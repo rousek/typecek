@@ -274,13 +274,17 @@ export function typeAtPosition(
         return undefined;
       }
       case NodeType.Partial: {
-        const r = findInExpr(node.dataExpr);
-        if (r) return r;
+        if (node.dataExpr) {
+          const r = findInExpr(node.dataExpr);
+          if (r) return r;
+        }
         return undefined;
       }
       case NodeType.LayoutBlock: {
-        const dataResult = findInExpr(node.dataExpr);
-        if (dataResult) return dataResult;
+        if (node.dataExpr) {
+          const dataResult = findInExpr(node.dataExpr);
+          if (dataResult) return dataResult;
+        }
         for (const child of node.body) {
           const r = findInNode(child);
           if (r) return r;
@@ -295,6 +299,7 @@ export function typeAtPosition(
   // Check if hovering the type name in the directive
   const dir = ast.typeDirective;
   if (
+    dir &&
     line === dir.typeNameLine &&
     column >= dir.typeNameColumn &&
     column < dir.typeNameColumn + dir.typeName.length

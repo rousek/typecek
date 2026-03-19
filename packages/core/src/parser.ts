@@ -156,7 +156,7 @@ export interface CommentNode {
 export interface PartialNode {
   type: NodeType.Partial;
   path: string;
-  dataExpr: ExprNode;
+  dataExpr: ExprNode | null;
   line: number;
   column: number;
 }
@@ -171,7 +171,7 @@ export interface MetaVariableNode {
 export interface LayoutBlockNode {
   type: NodeType.LayoutBlock;
   path: string;
-  dataExpr: ExprNode;
+  dataExpr: ExprNode | null;
   body: ASTNode[];
   line: number;
   column: number;
@@ -213,7 +213,7 @@ export interface TypeDirective {
 }
 
 export interface TemplateAST {
-  typeDirective: TypeDirective;
+  typeDirective: TypeDirective | null;
   body: ASTNode[];
   /** True if the template contains {{@content}} (is a layout template) */
   hasContent: boolean;
@@ -292,17 +292,14 @@ export function parse(template: string): TemplateAST {
     return tokens[pos]?.type;
   }
 
-  // Parse type directive from the beginning of the tokens
-  function parseTypeDirective(): TypeDirective {
+  // Parse type directive from the beginning of the tokens (optional)
+  function parseTypeDirective(): TypeDirective | null {
     // Expected: {{#import TypeName from "path"}} or {{#import TypeName from 'path'}}
-    if (peekType() !== TokenType.OpenBlock) {
-      throw new Error("Template must start with an import: {{#import TypeName from \"path\"}}");
-    }
-    pos++; // OpenBlock
+    if (peekType() !== TokenType.OpenBlock) return null;
+    const nextToken = tokens[pos + 1];
+    if (!nextToken || nextToken.type !== TokenType.BlockName || nextToken.value !== "import") return null;
 
-    if (peekType() !== TokenType.BlockName || current()!.value !== "import") {
-      throw new Error("Template must start with an import: {{#import TypeName from \"path\"}}");
-    }
+    pos++; // OpenBlock
     pos++; // import
 
     const typeNameToken = expect(TokenType.Identifier);
@@ -534,7 +531,10 @@ export function parse(template: string): TemplateAST {
       } else if (t.type === TokenType.OpenPartial) {
         pos++; // skip {{>
         const pathToken = expect(TokenType.StringLiteral);
-        const dataExpr = collectExpressionTokens();
+        let dataExpr: ExprNode | null = null;
+        if (peekType() !== TokenType.CloseExpression) {
+          dataExpr = collectExpressionTokens();
+        }
         expect(TokenType.CloseExpression);
         body.push({ type: NodeType.Partial, path: pathToken.value, dataExpr, line: t.line, column: t.column });
       } else if (t.type === TokenType.OpenBlock) {
@@ -922,7 +922,10 @@ export function parse(template: string): TemplateAST {
 
   function parseLayoutBlock(blockLine = 0, blockColumn = 0): LayoutBlockNode {
     const pathToken = expect(TokenType.StringLiteral);
-    const dataExpr = collectExpressionTokens();
+    let dataExpr: ExprNode | null = null;
+    if (peekType() !== TokenType.CloseExpression) {
+      dataExpr = collectExpressionTokens();
+    }
     expect(TokenType.CloseExpression);
 
     const body = parseBody(new Set());
@@ -951,16 +954,18 @@ export function parse(template: string): TemplateAST {
 
   // Main parse logic
   const typeDirective = parseTypeDirective();
-  checkNoDuplicateDirective();
+  if (typeDirective) {
+    checkNoDuplicateDirective();
 
-  // Skip newline after type directive if present
-  if (peekType() === TokenType.Text && current()!.value.startsWith("\n")) {
-    const tok = current()!;
-    const textValue = tok.value.slice(1);
-    pos++;
-    if (textValue.length > 0) {
-      // Re-insert the trimmed text (position shifts by one line)
-      tokens.splice(pos, 0, { type: TokenType.Text, value: textValue, line: tok.line + 1, column: 0 });
+    // Skip newline after type directive if present
+    if (peekType() === TokenType.Text && current()!.value.startsWith("\n")) {
+      const tok = current()!;
+      const textValue = tok.value.slice(1);
+      pos++;
+      if (textValue.length > 0) {
+        // Re-insert the trimmed text (position shifts by one line)
+        tokens.splice(pos, 0, { type: TokenType.Text, value: textValue, line: tok.line + 1, column: 0 });
+      }
     }
   }
 
