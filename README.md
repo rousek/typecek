@@ -8,6 +8,7 @@
   <a href="https://github.com/rousek/typecek/actions/workflows/ci.yml"><img src="https://github.com/rousek/typecek/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="https://www.npmjs.com/package/@typecek/cli"><img src="https://img.shields.io/npm/v/@typecek/cli" alt="npm" /></a>
   <a href="https://github.com/rousek/typecek/blob/main/LICENSE"><img src="https://img.shields.io/github/license/rousek/typecek" alt="License" /></a>
+  <a href="https://marketplace.visualstudio.com/items?itemName=typecek.typecek-vscode"><img src="https://img.shields.io/visual-studio-marketplace/v/typecek.typecek-vscode?label=VS%20Code" alt="VS Code Extension" /></a>
 </p>
 
 A typed templating language for TypeScript. Write `.tc` templates with full type safety — the compiler catches property typos, type mismatches, and missing fields at build time, not runtime.
@@ -207,7 +208,7 @@ const html = renderUser({
 
 ### VS Code Extension
 
-Install the **Typecek** extension for:
+Install the [**Typecek** extension](https://marketplace.visualstudio.com/items?itemName=typecek.typecek-vscode) for:
 - Real-time type error diagnostics
 - Hover to see types (`user: User | null`)
 - Go to Definition (Ctrl+Click) on properties to jump to TypeScript source

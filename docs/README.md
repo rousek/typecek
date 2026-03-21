@@ -13,8 +13,6 @@ Typecek is a typed templating language for TypeScript. Templates declare their d
 
 ## Installation
 
-<!-- TODO: Update once packages are published to npm -->
-
 ```bash
 npm install @typecek/cli @typecek/runtime
 ```
@@ -178,11 +176,9 @@ Since the template file ends in `.html.tc`, all `{{expressions}}` are HTML-escap
 - Run `typecek watch` during development for automatic recompilation
 - Run `typecek check` to type-check without generating output
 
-<!-- TODO: Add link to VS Code extension once published to the marketplace -->
-
 ### VS Code Extension
 
-Install the **Typecek** extension for the best development experience:
+Install the [**Typecek** extension](https://marketplace.visualstudio.com/items?itemName=typecek.typecek-vscode) for the best development experience:
 
 - Real-time type error diagnostics as you type
 - Hover over expressions to see their types

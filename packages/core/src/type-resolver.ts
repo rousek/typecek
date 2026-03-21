@@ -90,6 +90,10 @@ export class TypeResolver {
     this.loopVarStack.pop();
   }
 
+  getLoopVars(): Array<{ variable: string; type: Type }> {
+    return this.loopVarStack;
+  }
+
   pushNarrowing(map: NarrowingMap): void {
     if (map.size > 0) this.narrowingStack.push(map);
   }

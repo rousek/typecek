@@ -280,101 +280,90 @@ export function completionsAtPosition(
     return [];
   }
 
-  function posAfterNode(node: { line: number; column: number }): boolean {
-    return line > node.line || (line === node.line && column > node.column);
+  function buildResult(): CompletionEntry[] {
+    const entries = getProperties(resolver.currentScope()).map(entry => {
+      const narrowed = resolver.getNarrowedType(entry.name);
+      return narrowed ? { name: entry.name, type: narrowed } : entry;
+    });
+    const loopVars = resolver.getLoopVars().map(lv => {
+      const narrowed = resolver.getNarrowedType(lv.variable);
+      return { name: lv.variable, type: narrowed ?? lv.type };
+    });
+    return [...loopVars, ...entries];
   }
 
-  function searchNode(node: ASTNode): CompletionEntry[] | null {
+  // Walk the AST and find the deepest block containing the cursor line.
+  // Track the resolver state (scopes, loop vars, narrowings) as we go,
+  // so that the result reflects the context at the cursor position.
+  let bestResult: CompletionEntry[] = buildResult();
+
+  function walkNodes(nodes: ASTNode[]): void {
+    for (const node of nodes) {
+      // Only process nodes at or before the cursor line
+      if (node.line > line) continue;
+      walkNode(node);
+    }
+  }
+
+  function walkNode(node: ASTNode): void {
     switch (node.type) {
       case NodeType.ForBlock: {
         const iterableType = resolver.resolveExprType(node.iterable);
         const elementType = iterableType.kind === TypeKind.Array ? iterableType.elementType : { kind: TypeKind.Any as const };
         resolver.pushLoopVar(node.variable, elementType);
-        for (const child of node.body) {
-          const r = searchNode(child);
-          if (r) { resolver.popLoopVar(); return r; }
-        }
-        if (node.emptyBlock) {
-          for (const child of node.emptyBlock) {
-            const r = searchNode(child);
-            if (r) { resolver.popLoopVar(); return r; }
-          }
-        }
+        bestResult = buildResult();
+        walkNodes(node.body);
+        if (node.emptyBlock) walkNodes(node.emptyBlock);
         resolver.popLoopVar();
-        return null;
+        break;
       }
       case NodeType.WithBlock: {
         const withType = resolver.resolveExprType(node.expression);
         resolver.pushScope(withType);
-        for (const child of node.body) {
-          const r = searchNode(child);
-          if (r) { resolver.popScope(); return r; }
-        }
+        bestResult = buildResult();
+        walkNodes(node.body);
         resolver.popScope();
-        if (node.emptyBlock) {
-          for (const child of node.emptyBlock) {
-            const r = searchNode(child);
-            if (r) return r;
-          }
-        }
-        return null;
+        if (node.emptyBlock) walkNodes(node.emptyBlock);
+        break;
       }
       case NodeType.IfBlock: {
-        for (const child of node.consequent) {
-          const r = searchNode(child);
-          if (r) return r;
-        }
+        const narrowings = resolver.extractNarrowings(node.condition);
+
+        const consequentMap = resolver.buildNarrowingMap(narrowings, "consequent");
+        resolver.pushNarrowing(consequentMap);
+        bestResult = buildResult();
+        walkNodes(node.consequent);
+        resolver.popNarrowing(consequentMap);
+
         if (node.alternate) {
+          const alternateMap = resolver.buildNarrowingMap(narrowings, "alternate");
+          resolver.pushNarrowing(alternateMap);
+          bestResult = buildResult();
           if (Array.isArray(node.alternate)) {
-            for (const child of node.alternate) {
-              const r = searchNode(child);
-              if (r) return r;
-            }
+            walkNodes(node.alternate);
           } else {
-            const r = searchNode(node.alternate);
-            if (r) return r;
+            walkNode(node.alternate);
           }
+          resolver.popNarrowing(alternateMap);
         }
-        return null;
+        break;
       }
       case NodeType.SwitchBlock: {
         for (const c of node.cases) {
-          for (const child of c.body) {
-            const r = searchNode(child);
-            if (r) return r;
-          }
+          walkNodes(c.body);
         }
-        if (node.defaultCase) {
-          for (const child of node.defaultCase) {
-            const r = searchNode(child);
-            if (r) return r;
-          }
-        }
-        return null;
+        if (node.defaultCase) walkNodes(node.defaultCase);
+        break;
       }
       case NodeType.LayoutBlock: {
-        for (const child of node.body) {
-          const r = searchNode(child);
-          if (r) return r;
-        }
-        return null;
+        walkNodes(node.body);
+        break;
       }
-      case NodeType.Expression:
-      case NodeType.RawExpression:
-        if (node.line === line && posAfterNode(node)) {
-          const entries = getProperties(resolver.currentScope());
-          return entries;
-        }
-        return null;
       default:
-        return null;
+        break;
     }
   }
 
-  for (const node of ast.body) {
-    const result = searchNode(node);
-    if (result) return result;
-  }
-
-  return getProperties(resolver.currentScope());
+  walkNodes(ast.body);
+  return bestResult;
 }
