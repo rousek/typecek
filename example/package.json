@@ -3,10 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "compile": "typecek compile",
+    "compile": "node ../packages/cli/dist/bin.js compile",
     "render": "tsx src/render.ts",
     "build": "pnpm compile && pnpm render",
-    "clean": "typecek clean && rm -rf dist out"
+    "clean": "node ../packages/cli/dist/bin.js clean && rm -rf dist out"
   },
   "dependencies": {
     "@typecek/cli": "workspace:*",

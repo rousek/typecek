@@ -32,5 +32,15 @@ git add -A
 git commit -m "v$VERSION"
 git tag "v$VERSION"
 
+# Push and create GitHub release
 echo ""
-echo "Done! Run 'git push && git push --tags' to trigger the GitHub release."
+echo "Pushing to remote..."
+git push
+git push --tags
+
+echo ""
+echo "Creating GitHub release..."
+gh release create "v$VERSION" --generate-notes --title "v$VERSION"
+
+echo ""
+echo "Done! Released v$VERSION"
