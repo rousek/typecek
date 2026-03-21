@@ -16,6 +16,16 @@
     "@typecek/core": "workspace:*",
     "@typecek/compiler": "workspace:*"
   },
-  "files": ["dist"],
-  "license": "UNLICENSED"
+  "files": [
+    "dist"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rousek/typecek",
+    "directory": "packages/cli"
+  }
 }

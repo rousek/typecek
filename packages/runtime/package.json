@@ -9,6 +9,17 @@
     "build": "tsc -b",
     "clean": "rm -rf dist *.tsbuildinfo"
   },
-  "files": ["dist"],
-  "license": "UNLICENSED"
+  "files": [
+    "dist",
+    "!dist/__tests__"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rousek/typecek",
+    "directory": "packages/runtime"
+  }
 }

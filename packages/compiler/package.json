@@ -12,6 +12,16 @@
     "@typecek/core": "workspace:*",
     "@typecek/runtime": "workspace:*"
   },
-  "files": ["dist"],
-  "license": "UNLICENSED"
+  "files": [
+    "dist"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rousek/typecek",
+    "directory": "packages/compiler"
+  }
 }

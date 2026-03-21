@@ -142,5 +142,6 @@
     "icons",
     "language-configuration.json"
   ],
-  "license": "UNLICENSED"
+  "private": true,
+  "license": "MIT"
 }
