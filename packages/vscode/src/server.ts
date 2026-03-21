@@ -659,6 +659,7 @@ function checkDocument(document: TextDocument): void {
 
     try {
       const dataType = resolveType(typeFilePath, typeName);
+      resolveCache.set(document.uri, { ast, dataType });
       const checkerDiags = typecheck(ast, dataType, { templateDir });
 
       for (const diag of checkerDiags) {

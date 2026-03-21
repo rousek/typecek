@@ -115,6 +115,7 @@ export interface IfBlockNode {
   stripTrailing: boolean;
   line: number;
   column: number;
+  endLine: number;
 }
 
 export interface ForBlockNode {
@@ -127,6 +128,7 @@ export interface ForBlockNode {
   emptyBlock: ASTNode[] | null;
   line: number;
   column: number;
+  endLine: number;
 }
 
 export interface SwitchCase {
@@ -143,6 +145,7 @@ export interface SwitchBlockNode {
   defaultCase: ASTNode[] | null;
   line: number;
   column: number;
+  endLine: number;
 }
 
 export interface WithBlockNode {
@@ -152,6 +155,7 @@ export interface WithBlockNode {
   emptyBlock: ASTNode[] | null;
   line: number;
   column: number;
+  endLine: number;
 }
 
 export interface CommentNode {
@@ -183,6 +187,7 @@ export interface LayoutBlockNode {
   body: ASTNode[];
   line: number;
   column: number;
+  endLine: number;
 }
 
 export interface ContentNode {
@@ -671,14 +676,17 @@ export function parse(template: string): TemplateAST {
 
     // Expect closing {{/if}} — but not if alternate is a nested IfBlock
     // (else if), because the nested parseIfBlock already consumed {{/if}}
+    let endLine = blockLine;
     if (alternate && !Array.isArray(alternate) && alternate.type === NodeType.IfBlock) {
       // {{/if}} was already consumed by the nested else-if chain
+      endLine = alternate.endLine;
     } else if (peekType() === TokenType.CloseBlock) {
       pos++; // skip {{/
       const closeBlockName = expect(TokenType.BlockName);
       if (closeBlockName.value !== "if") {
         throw new ParseError(`Expected {{/if}} but got {{/${closeBlockName.value}}}`, closeBlockName.line, closeBlockName.column, closeBlockName.value.length);
       }
+      endLine = closeBlockName.line;
       if (peekType() === TokenType.WhitespaceStrip) {
         stripTrailing = true;
         pos++;
@@ -697,6 +705,7 @@ export function parse(template: string): TemplateAST {
       stripTrailing,
       line: blockLine,
       column: blockColumn,
+      endLine,
     };
   }
 
@@ -752,12 +761,14 @@ export function parse(template: string): TemplateAST {
     }
 
     // Expect {{/for}}
+    let endLine = blockLine;
     if (peekType() === TokenType.CloseBlock) {
       pos++; // skip {{/
       const closeBlockName = expect(TokenType.BlockName);
       if (closeBlockName.value !== "for") {
         throw new ParseError(`Expected {{/for}} but got {{/${closeBlockName.value}}}`, closeBlockName.line, closeBlockName.column, closeBlockName.value.length);
       }
+      endLine = closeBlockName.line;
       expect(TokenType.CloseExpression);
     } else {
       throw new ParseError("Unclosed {{#for}} block — missing {{/for}}", blockLine, blockColumn, 5);
@@ -775,6 +786,7 @@ export function parse(template: string): TemplateAST {
       emptyBlock,
       line: blockLine,
       column: blockColumn,
+      endLine,
     };
   }
 
@@ -842,12 +854,14 @@ export function parse(template: string): TemplateAST {
     }
 
     // Expect {{/switch}}
+    let endLine = blockLine;
     if (peekType() === TokenType.CloseBlock) {
       pos++; // skip {{/
       const closeBlockName = expect(TokenType.BlockName);
       if (closeBlockName.value !== "switch") {
         throw new ParseError(`Expected {{/switch}} but got {{/${closeBlockName.value}}}`, closeBlockName.line, closeBlockName.column, closeBlockName.value.length);
       }
+      endLine = closeBlockName.line;
       expect(TokenType.CloseExpression);
     } else {
       throw new ParseError("Unclosed {{#switch}} block — missing {{/switch}}", blockLine, blockColumn, 10);
@@ -860,6 +874,7 @@ export function parse(template: string): TemplateAST {
       defaultCase,
       line: blockLine,
       column: blockColumn,
+      endLine,
     };
   }
 
@@ -909,12 +924,14 @@ export function parse(template: string): TemplateAST {
     }
 
     // Expect {{/with}}
+    let endLine = blockLine;
     if (peekType() === TokenType.CloseBlock) {
       pos++; // skip {{/
       const closeBlockName = expect(TokenType.BlockName);
       if (closeBlockName.value !== "with") {
         throw new ParseError(`Expected {{/with}} but got {{/${closeBlockName.value}}}`, closeBlockName.line, closeBlockName.column, closeBlockName.value.length);
       }
+      endLine = closeBlockName.line;
       expect(TokenType.CloseExpression);
     } else {
       throw new ParseError("Unclosed {{#with}} block — missing {{/with}}", blockLine, blockColumn, 7);
@@ -927,6 +944,7 @@ export function parse(template: string): TemplateAST {
       emptyBlock,
       line: blockLine,
       column: blockColumn,
+      endLine,
     };
   }
 
@@ -941,12 +959,14 @@ export function parse(template: string): TemplateAST {
     const body = parseBody(new Set());
 
     // Expect {{/layout}}
+    let endLine = blockLine;
     if (peekType() === TokenType.CloseBlock) {
       pos++; // skip {{/
       const closeBlockName = expect(TokenType.BlockName);
       if (closeBlockName.value !== "layout") {
         throw new ParseError(`Expected {{/layout}} but got {{/${closeBlockName.value}}}`, closeBlockName.line, closeBlockName.column, closeBlockName.value.length);
       }
+      endLine = closeBlockName.line;
       expect(TokenType.CloseExpression);
     } else {
       throw new ParseError("Unclosed {{#layout}} block — missing {{/layout}}", blockLine, blockColumn, 10);
@@ -959,6 +979,7 @@ export function parse(template: string): TemplateAST {
       body,
       line: blockLine,
       column: blockColumn,
+      endLine,
     };
   }
 

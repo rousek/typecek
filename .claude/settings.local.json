@@ -13,7 +13,8 @@
       "Bash(code --install-extension typecek-vscode-0.0.3.vsix --force)",
       "Bash(pnpm -r run build)",
       "Bash(sed -i '' 's/\"\"\"\"0.0.3\"\"\"\"/\"\"\"\"0.0.4\"\"\"\"/' package.json)",
-      "Bash(code --install-extension typecek-vscode-0.0.4.vsix --force)"
+      "Bash(code --install-extension typecek-vscode-0.0.4.vsix --force)",
+      "Bash(npx vitest:*)"
     ]
   }
 }

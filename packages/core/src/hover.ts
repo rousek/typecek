@@ -372,6 +372,7 @@ export function completionsAtPosition(
   function walkNode(node: ASTNode): void {
     switch (node.type) {
       case NodeType.ForBlock: {
+        if (line > node.endLine) break;
         const iterableType = resolver.resolveExprType(node.iterable);
         const elementType = iterableType.kind === TypeKind.Array ? iterableType.elementType : { kind: TypeKind.Any as const };
         resolver.pushLoopVar(node.variable, elementType);
@@ -382,6 +383,7 @@ export function completionsAtPosition(
         break;
       }
       case NodeType.WithBlock: {
+        if (line > node.endLine) break;
         const withType = resolver.resolveExprType(node.expression);
         resolver.pushScope(withType);
         bestResult = buildResult();
@@ -391,18 +393,17 @@ export function completionsAtPosition(
         break;
       }
       case NodeType.IfBlock: {
+        if (line > node.endLine) break;
         const narrowings = resolver.extractNarrowings(node.condition);
 
         const consequentMap = resolver.buildNarrowingMap(narrowings, "consequent");
         resolver.pushNarrowing(consequentMap);
-        const savedBeforeConsequent = bestResult;
         bestResult = buildResult();
         walkNodes(node.consequent);
         const consequentResult = bestResult;
         resolver.popNarrowing(consequentMap);
 
         if (node.alternate) {
-          // Check if the alternate branch starts at or before the cursor line
           const altFirstLine = Array.isArray(node.alternate)
             ? node.alternate[0]?.line
             : node.alternate.line;
@@ -424,6 +425,7 @@ export function completionsAtPosition(
         break;
       }
       case NodeType.SwitchBlock: {
+        if (line > node.endLine) break;
         for (const c of node.cases) {
           walkNodes(c.body);
         }
