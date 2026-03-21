@@ -470,8 +470,17 @@ function getTypecekCompletions(document: TextDocument, position: { line: number;
 
   const closeMatch = textBefore.match(/\{\{\/(\w*)$/);
   if (closeMatch) {
-    const tags = ["if", "for", "with", "switch", "case", "default", "empty", "raw", "layout"];
-    return tags.map((tag) => ({ label: tag, kind: CompletionItemKind.Keyword }));
+    const unclosed = findUnclosedTags(document, position);
+    const allTags = ["if", "for", "with", "switch", "case", "default", "empty", "raw", "layout"];
+    return allTags.map((tag) => {
+      const idx = unclosed.indexOf(tag);
+      return {
+        label: tag,
+        kind: CompletionItemKind.Keyword,
+        sortText: idx === 0 ? "0_" + tag : idx > 0 ? "1_" + tag : "2_" + tag,
+        preselect: idx === 0,
+      };
+    });
   }
 
   // 2. Partial snippet after {{>
@@ -689,6 +698,37 @@ function checkDocument(document: TextDocument): void {
   }
 
   connection.sendDiagnostics({ uri: document.uri, diagnostics });
+}
+
+// --- Unclosed tag detection ---
+
+function findUnclosedTags(document: TextDocument, position: { line: number; character: number }): string[] {
+  const offset = document.offsetAt(position);
+  const textBefore = document.getText().slice(0, offset);
+
+  const stack: string[] = [];
+  const closable = new Set(["if", "for", "with", "switch", "case", "default", "empty", "raw", "layout"]);
+  const pattern = /\{\{[#/](\w+)/g;
+  let match;
+
+  while ((match = pattern.exec(textBefore)) !== null) {
+    const isOpen = match[0][2] === "#";
+    const tag = match[1];
+    if (!closable.has(tag)) continue;
+
+    if (isOpen) {
+      // "else" is not a block that gets closed, skip
+      if (tag === "else") continue;
+      stack.push(tag);
+    } else {
+      // Pop matching open tag from the stack
+      const idx = stack.lastIndexOf(tag);
+      if (idx !== -1) stack.splice(idx, 1);
+    }
+  }
+
+  // Return unclosed tags, innermost first
+  return stack.reverse();
 }
 
 // --- Helpers ---
