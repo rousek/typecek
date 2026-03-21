@@ -70,6 +70,7 @@ export interface PropertyAccessNode {
   type: NodeType.PropertyAccess;
   object: ExprNode;
   property: string;
+  optional: boolean;
   line: number;
   column: number;
 }
@@ -408,10 +409,11 @@ export function parse(template: string): TemplateAST {
       const ident = expect(TokenType.Identifier);
       let node: ExprNode = { type: NodeType.Identifier, name: ident.value, depth, line: startToken.line, column: startToken.column };
 
-      while (peekType() === TokenType.Dot) {
+      while (peekType() === TokenType.Dot || peekType() === TokenType.OptionalDot) {
+        const optional = peekType() === TokenType.OptionalDot;
         pos++;
         const prop = expect(TokenType.Identifier);
-        node = { type: NodeType.PropertyAccess, object: node, property: prop.value, line: startToken.line, column: startToken.column };
+        node = { type: NodeType.PropertyAccess, object: node, property: prop.value, optional, line: startToken.line, column: startToken.column };
       }
 
       return node;
@@ -422,10 +424,11 @@ export function parse(template: string): TemplateAST {
       let node: ExprNode = { type: NodeType.Identifier, name: t.value, depth: 0, line: t.line, column: t.column };
 
       // Property access chain
-      while (peekType() === TokenType.Dot) {
-        pos++; // skip dot
+      while (peekType() === TokenType.Dot || peekType() === TokenType.OptionalDot) {
+        const optional = peekType() === TokenType.OptionalDot;
+        pos++; // skip dot or ?.
         const prop = expect(TokenType.Identifier);
-        node = { type: NodeType.PropertyAccess, object: node, property: prop.value, line: t.line, column: t.column };
+        node = { type: NodeType.PropertyAccess, object: node, property: prop.value, optional, line: t.line, column: t.column };
       }
 
       return node;

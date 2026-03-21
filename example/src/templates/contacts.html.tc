@@ -12,11 +12,29 @@
 <h2>Contacts</h2>
 <div class="contacts">
   {{#for customer in customers}}
+  {{#if customer.firstName}}
+    {{customer.firstName}}
+  {{#else}}
+    {{customer.companyName}}
+  {{/if}}
+  {{/for}}
+</div>
+
+
+
+
+
+
+
+
+
+
+
+<h2>Contacts</h2>
+<div class="contacts">
+  {{#for customer in customers}}
   <div class="card">
     {{#if customer.companyName}}
-    {{#raw}}
-    <span class="badge badge-company {{customer.companyName}}">Company</span>
-    {{/raw}}
       <span class="badge badge-company {{customer.companyName}}">Company</span>
       <h3>{{customer.companyName}}</h3>
       <p>Reg. No: {{customer.registrationNumber}}</p>

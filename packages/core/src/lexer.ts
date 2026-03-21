@@ -35,6 +35,7 @@ export enum TokenType {
   OpenParen,
   CloseParen,
   WhitespaceStrip,
+  OptionalDot,
   DotDotSlash,
   DotSlash,
 }
@@ -217,6 +218,9 @@ export function tokenize(template: string): Token[] {
       } else if (ch === "." && template[pos + 1] === "/") {
         emit(TokenType.DotSlash, "./", tokenStart);
         pos += 2;
+      } else if (ch === "?" && template[pos + 1] === ".") {
+        emit(TokenType.OptionalDot, "?.", tokenStart);
+        pos += 2;
       } else if (ch === ".") {
         emit(TokenType.Dot, ".", tokenStart);
         pos++;
@@ -253,6 +257,10 @@ export function tokenize(template: string): Token[] {
         } else {
           emit(TokenType.Identifier, word, tokenStart);
         }
+      } else if (ch === "?") {
+        // Standalone ? is not valid (only ?. is)
+        emit(TokenType.Identifier, "?", tokenStart);
+        pos++;
       } else {
         // Skip unknown characters
         pos++;

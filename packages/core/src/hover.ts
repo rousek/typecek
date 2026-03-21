@@ -58,7 +58,7 @@ export function typeAtPosition(
   function findInExpr(node: ExprNode): HoverResult | undefined {
     if (node.type === NodeType.PropertyAccess) {
       const objText = formatExpr(node.object);
-      const propStart = node.column + objText.length + 1;
+      const propStart = node.column + objText.length + (node.optional ? 2 : 1);
       if (line === node.line && column >= propStart && column < propStart + node.property.length) {
         const type = resolver.resolveExprType(node);
         const text = formatExpr(node);

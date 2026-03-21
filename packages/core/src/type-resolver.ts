@@ -45,7 +45,7 @@ export function formatExpr(node: ExprNode): string {
       return prefix + node.name;
     }
     case NodeType.PropertyAccess:
-      return `${formatExpr(node.object)}.${node.property}`;
+      return `${formatExpr(node.object)}${node.optional ? "?." : "."}${node.property}`;
     case NodeType.BinaryExpression:
       return `${formatExpr(node.left)} ${node.operator} ${formatExpr(node.right)}`;
     case NodeType.UnaryExpression:
@@ -181,8 +181,22 @@ export class TypeResolver {
       }
 
       case NodeType.PropertyAccess: {
-        const objectType = this.resolveExprType(node.object);
+        let objectType = this.resolveExprType(node.object);
         if (objectType.kind === TypeKind.Any) return { kind: TypeKind.Any };
+
+        // Optional chaining: strip null/undefined before resolving
+        let wasNullable = false;
+        if (node.optional && objectType.kind === TypeKind.Union) {
+          const nonNullish = objectType.types.filter(
+            t => t.kind !== TypeKind.Null && t.kind !== TypeKind.Undefined,
+          );
+          wasNullable = nonNullish.length < objectType.types.length;
+          if (nonNullish.length === 0) return { kind: TypeKind.Undefined };
+          objectType = nonNullish.length === 1 ? nonNullish[0] : { kind: TypeKind.Union, types: nonNullish };
+        } else if (node.optional && (objectType.kind === TypeKind.Null || objectType.kind === TypeKind.Undefined)) {
+          return { kind: TypeKind.Undefined };
+        }
+
         const resolved = resolveProperty(objectType, node.property);
         if (!resolved) {
           this.errors?.error(
@@ -190,6 +204,13 @@ export class TypeResolver {
             node,
           );
           return { kind: TypeKind.Any };
+        }
+
+        // Optional chaining adds undefined to result if object was nullable
+        if (node.optional && wasNullable) {
+          if (resolved.kind === TypeKind.Undefined) return resolved;
+          if (resolved.kind === TypeKind.Union && resolved.types.some(t => t.kind === TypeKind.Undefined)) return resolved;
+          return { kind: TypeKind.Union, types: [resolved, { kind: TypeKind.Undefined }] };
         }
         return resolved;
       }

@@ -548,9 +548,9 @@ function getTypecekCompletions(document: TextDocument, position: { line: number;
   if (!resolved) return null;
 
   // Dot completion
-  const dotMatch = textBefore.match(/(\w+(?:\.\w+)*)\.\s*(\w*)$/);
+  const dotMatch = textBefore.match(/(\w+(?:\??\.[\w]+)*)\??\.\s*(\w*)$/);
   if (dotMatch) {
-    const chain = dotMatch[1].split(".");
+    const chain = dotMatch[1].split(/\??\./);
     const partial = dotMatch[2] || "";
     const type = resolveChainAtPosition(resolved.ast, resolved.dataType, chain, position.line);
     if (!type) return null;
