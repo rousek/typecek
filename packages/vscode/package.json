@@ -118,6 +118,11 @@
         "language": "typecek",
         "scopeName": "text.typecek",
         "path": "./syntaxes/typecek.tmLanguage.json"
+      },
+      {
+        "scopeName": "text.html.typecek.injection",
+        "path": "./syntaxes/typecek-html-injection.tmLanguage.json",
+        "injectTo": ["text.html.typecek"]
       }
     ]
   },

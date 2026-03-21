@@ -1,0 +1,84 @@
+{
+  "scopeName": "text.html.typecek.injection",
+  "injectionSelector": "L:text.html.typecek string -meta.raw-block.typecek",
+  "patterns": [
+    {
+      "name": "meta.raw-block.typecek",
+      "begin": "\\{\\{#raw\\}\\}",
+      "beginCaptures": {
+        "0": { "name": "keyword.control.raw.typecek" }
+      },
+      "end": "\\{\\{/raw\\}\\}",
+      "endCaptures": {
+        "0": { "name": "keyword.control.raw.typecek" }
+      }
+    },
+    {
+      "name": "meta.embedded.expression.typecek",
+      "begin": "\\{\\{\\{",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.template-expression.begin.typecek" }
+      },
+      "end": "\\}\\}\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.template-expression.end.typecek" }
+      },
+      "patterns": [
+        { "include": "text.typecek#expression-content" }
+      ]
+    },
+    {
+      "name": "meta.embedded.expression.typecek",
+      "begin": "\\{\\{/",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.template-expression.begin.typecek" }
+      },
+      "end": "\\}\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.template-expression.end.typecek" }
+      },
+      "patterns": [
+        {
+          "match": "\\b(if|for|switch|case|default|empty|raw|with|layout)\\b",
+          "name": "keyword.control.typecek"
+        }
+      ]
+    },
+    {
+      "name": "meta.embedded.expression.typecek",
+      "begin": "\\{\\{~?#",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.template-expression.begin.typecek" }
+      },
+      "end": "\\}\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.template-expression.end.typecek" }
+      },
+      "patterns": [
+        {
+          "match": "\\b(if|else|for|switch|case|default|empty|with|layout|import)\\b",
+          "name": "keyword.control.typecek"
+        },
+        {
+          "match": "\\b(in|from)\\b",
+          "name": "keyword.operator.typecek"
+        },
+        { "include": "text.typecek#expression-content" }
+      ]
+    },
+    {
+      "name": "meta.embedded.expression.typecek",
+      "begin": "\\{\\{~?",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.template-expression.begin.typecek" }
+      },
+      "end": "~?\\}\\}",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.template-expression.end.typecek" }
+      },
+      "patterns": [
+        { "include": "text.typecek#expression-content" }
+      ]
+    }
+  ]
+}

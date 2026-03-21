@@ -14,7 +14,10 @@
   {{#for customer in customers}}
   <div class="card">
     {{#if customer.companyName}}
-      <span class="badge badge-company">Company</span>
+    {{#raw}}
+    <span class="badge badge-company {{customer.companyName}}">Company</span>
+    {{/raw}}
+      <span class="badge badge-company {{customer.companyName}}">Company</span>
       <h3>{{customer.companyName}}</h3>
       <p>Reg. No: {{customer.registrationNumber}}</p>
       <p>Revenue: ${{customer.revenue}}</p>

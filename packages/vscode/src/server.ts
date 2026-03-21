@@ -69,7 +69,7 @@ connection.onInitialize((_params: InitializeParams): InitializeResult => {
     capabilities: {
       textDocumentSync: TextDocumentSyncKind.Full,
       completionProvider: {
-        triggerCharacters: [".", "#", "/", ">", '"', "'", "<", " ", ":", "-"],
+        triggerCharacters: [".", "#", "/", ">", '"', "'", "<", " ", ":", "-", "{"],
       },
       hoverProvider: true,
       definitionProvider: true,
