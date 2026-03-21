@@ -18,7 +18,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
           registry-url: https://registry.npmjs.org
 
@@ -35,10 +35,10 @@ jobs:
 
       - name: Publish to npm
         run: |
-          pnpm --filter @typecek/runtime publish --access public --no-git-checks --provenance
-          pnpm --filter @typecek/core publish --access public --no-git-checks --provenance
-          pnpm --filter @typecek/compiler publish --access public --no-git-checks --provenance
-          pnpm --filter @typecek/cli publish --access public --no-git-checks --provenance
+          pnpm --filter @typecek/runtime publish --access public --no-git-checks
+          pnpm --filter @typecek/core publish --access public --no-git-checks
+          pnpm --filter @typecek/compiler publish --access public --no-git-checks
+          pnpm --filter @typecek/cli publish --access public --no-git-checks
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
