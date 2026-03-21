@@ -1,4 +1,8 @@
-# Typecek
+<p align="center">
+  <img src="resources/tc_logo.svg" alt="Typecek" width="120" />
+</p>
+
+<h1 align="center">Typecek</h1>
 
 A typed templating language for TypeScript. Write `.tc` templates with full type safety — the compiler catches property typos, type mismatches, and missing fields at build time, not runtime.
 

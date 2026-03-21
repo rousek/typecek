@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="../resources/tc_logo.svg" alt="Typecek" width="120" />
+</p>
+
 # Getting Started with Typecek
 
 Typecek is a typed templating language for TypeScript. Templates declare their data type upfront and the compiler validates every expression against it — catching typos, missing properties, and type mismatches at build time.
