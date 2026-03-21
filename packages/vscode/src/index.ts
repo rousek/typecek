@@ -8,6 +8,7 @@ import {
   findDeclaration,
   typeAtPosition,
   completionsAtPosition,
+  resolveChainAtPosition,
   formatTypeDefinition,
   formatType,
   TypeKind,
@@ -473,9 +474,10 @@ function getCompletions(document: vscode.TextDocument, position: vscode.Position
   const dotMatch = textBefore.match(/(\w+(?:\.\w+)*)\.\s*(\w*)$/);
   if (dotMatch) {
     const chain = dotMatch[1].split(".");
-    let type = resolveChain(resolved.dataType, resolved.ast, chain, position.line);
+    let type = resolveChainAtPosition(resolved.ast, resolved.dataType, chain, position.line);
     if (!type) return undefined;
-    return getPropertyCompletions(type);
+    const items = getPropertyCompletions(type);
+    return new vscode.CompletionList(items, true);
   }
 
   // Bare identifier completion
@@ -489,33 +491,6 @@ function getCompletions(document: vscode.TextDocument, position: vscode.Position
   } catch {
     return undefined;
   }
-}
-
-function resolveChain(dataType: Type, ast: ReturnType<typeof parse>, chain: string[], _line: number): Type | undefined {
-  let type = dataType;
-  for (const name of chain) {
-    if (type.kind === TypeKind.Object) {
-      const prop = type.properties.get(name);
-      if (!prop) return undefined;
-      type = prop;
-    } else if (type.kind === TypeKind.Union) {
-      let found: Type | undefined;
-      for (const t of type.types) {
-        if (t.kind === TypeKind.Null || t.kind === TypeKind.Undefined) continue;
-        if (t.kind === TypeKind.Object) {
-          found = t.properties.get(name);
-          if (found) break;
-        }
-      }
-      if (!found) return undefined;
-      type = found;
-    } else if (type.kind === TypeKind.Any) {
-      return type;
-    } else {
-      return undefined;
-    }
-  }
-  return type;
 }
 
 function getPropertyCompletions(type: Type): vscode.CompletionItem[] {

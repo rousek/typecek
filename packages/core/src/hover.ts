@@ -331,20 +331,31 @@ export function completionsAtPosition(
 
         const consequentMap = resolver.buildNarrowingMap(narrowings, "consequent");
         resolver.pushNarrowing(consequentMap);
+        const savedBeforeConsequent = bestResult;
         bestResult = buildResult();
         walkNodes(node.consequent);
+        const consequentResult = bestResult;
         resolver.popNarrowing(consequentMap);
 
         if (node.alternate) {
-          const alternateMap = resolver.buildNarrowingMap(narrowings, "alternate");
-          resolver.pushNarrowing(alternateMap);
-          bestResult = buildResult();
-          if (Array.isArray(node.alternate)) {
-            walkNodes(node.alternate);
+          // Check if the alternate branch starts at or before the cursor line
+          const altFirstLine = Array.isArray(node.alternate)
+            ? node.alternate[0]?.line
+            : node.alternate.line;
+
+          if (altFirstLine !== undefined && altFirstLine <= line) {
+            const alternateMap = resolver.buildNarrowingMap(narrowings, "alternate");
+            resolver.pushNarrowing(alternateMap);
+            bestResult = buildResult();
+            if (Array.isArray(node.alternate)) {
+              walkNodes(node.alternate);
+            } else {
+              walkNode(node.alternate);
+            }
+            resolver.popNarrowing(alternateMap);
           } else {
-            walkNode(node.alternate);
+            bestResult = consequentResult;
           }
-          resolver.popNarrowing(alternateMap);
         }
         break;
       }
@@ -366,4 +377,49 @@ export function completionsAtPosition(
 
   walkNodes(ast.body);
   return bestResult;
+}
+
+/**
+ * Resolve the type of a dotted chain (e.g. ["customer", "address"]) at a
+ * given cursor position, accounting for loop variables and type narrowing.
+ */
+export function resolveChainAtPosition(
+  ast: TemplateAST,
+  dataType: Type,
+  chain: string[],
+  line: number,
+): Type | undefined {
+  // First, get the completions at this position to find the root variable type
+  const entries = completionsAtPosition(ast, dataType, line, 0);
+  if (chain.length === 0) return undefined;
+
+  const rootName = chain[0];
+  const rootEntry = entries.find(e => e.name === rootName);
+  if (!rootEntry) return undefined;
+
+  let type = rootEntry.type;
+  for (let i = 1; i < chain.length; i++) {
+    const name = chain[i];
+    if (type.kind === TypeKind.Object) {
+      const prop = type.properties.get(name);
+      if (!prop) return undefined;
+      type = prop;
+    } else if (type.kind === TypeKind.Union) {
+      let found: Type | undefined;
+      for (const t of type.types) {
+        if (t.kind === TypeKind.Null || t.kind === TypeKind.Undefined) continue;
+        if (t.kind === TypeKind.Object) {
+          found = t.properties.get(name);
+          if (found) break;
+        }
+      }
+      if (!found) return undefined;
+      type = found;
+    } else if (type.kind === TypeKind.Any) {
+      return type;
+    } else {
+      return undefined;
+    }
+  }
+  return type;
 }
