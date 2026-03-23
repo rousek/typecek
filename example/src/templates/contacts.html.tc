@@ -11,20 +11,6 @@
 
 <h2>Contacts</h2>
 <div class="contacts">
-</div>
-
-
-
-
-
-
-
-
-
-
-
-<h2>Contacts</h2>
-<div class="contacts">
   {{#for customer in customers}}
   <div class="card">
     {{#if customer.companyName}}

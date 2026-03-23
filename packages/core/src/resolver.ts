@@ -124,21 +124,26 @@ export function findDeclaration(
   let tsType = checker.getTypeAtLocation(typeDecl);
   let declaration: ts.Declaration | undefined;
 
-  for (const propName of propertyPath) {
-    // Unwrap unions to find the object type
-    if (tsType.isUnion()) {
-      for (const t of tsType.types) {
-        if (!(t.flags & (ts.TypeFlags.Null | ts.TypeFlags.Undefined))) {
-          tsType = t;
-          break;
-        }
-      }
+  function unwrapUnion(type: ts.Type, propName: string): ts.Type {
+    if (!type.isUnion()) return type;
+    // Prefer the member that has the property
+    const match = type.types.find(t => !!t.getProperty(propName));
+    if (match) return match;
+    // Fall back to first non-null/undefined member
+    for (const t of type.types) {
+      if (!(t.flags & (ts.TypeFlags.Null | ts.TypeFlags.Undefined))) return t;
     }
+    return type;
+  }
+
+  for (const propName of propertyPath) {
+    tsType = unwrapUnion(tsType, propName);
     // Unwrap arrays to get element type
     if (checker.isArrayType(tsType)) {
       const typeArgs = checker.getTypeArguments(tsType as ts.TypeReference);
       if (typeArgs[0]) tsType = typeArgs[0];
     }
+    tsType = unwrapUnion(tsType, propName);
 
     const prop = tsType.getProperty(propName);
     if (!prop) return undefined;
