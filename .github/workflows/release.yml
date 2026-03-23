@@ -23,7 +23,7 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - name: Remove deprecated always-auth from .npmrc
-        run: sed -i '/always-auth/d' ~/.npmrc
+        run: sed -i '/always-auth/d' ~/.npmrc || true
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
