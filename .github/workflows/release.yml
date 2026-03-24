@@ -51,6 +51,21 @@ jobs:
           pnpm --filter @typecek/compiler publish --access public --no-git-checks
           pnpm --filter @typecek/cli publish --access public --no-git-checks
 
+      - name: Update extension changelog
+        env:
+          RELEASE_BODY: ${{ github.event.release.body }}
+        run: |
+          CHANGELOG="packages/vscode/CHANGELOG.md"
+          {
+            echo "## v${VERSION}"
+            echo ""
+            echo "$RELEASE_BODY"
+            echo ""
+            if [ -f "$CHANGELOG" ]; then
+              cat "$CHANGELOG"
+            fi
+          } > tmp && mv tmp "$CHANGELOG"
+
       - name: Publish VS Code extension
         run: |
           cd packages/vscode
