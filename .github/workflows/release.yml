@@ -51,6 +51,13 @@ jobs:
           pnpm --filter @typecek/compiler publish --access public --no-git-checks
           pnpm --filter @typecek/cli publish --access public --no-git-checks
 
+      - name: Publish VS Code extension
+        run: |
+          cd packages/vscode
+          pnpm vsce publish --no-dependencies
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
