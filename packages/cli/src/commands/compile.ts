@@ -131,6 +131,7 @@ export function compileAll(checkOnly = false): void {
         template,
         filename: path.basename(templatePath),
         templatePath,
+        outputPath,
         typecheck: true,
       });
 

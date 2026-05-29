@@ -180,4 +180,54 @@ describe("compiler", () => {
       expect(result.code).toContain("import __partial_0");
     });
   });
+
+  describe("import path adjustment for outputPath", () => {
+    it("adjusts import path when output is deeper than source", () => {
+      const result = compile({
+        template: '{{#import Foo from "../types/bar"}}\n{{name}}',
+        filename: "x.ts.tc",
+        templatePath: "/project/templates/x.ts.tc",
+        outputPath: "/project/.typecek/templates/x.ts.ts",
+      });
+      expect(result.code).toContain('from "../../types/bar"');
+    });
+
+    it("keeps import path unchanged when source and output share same depth", () => {
+      const result = compile({
+        template: '{{#import Foo from "../types/bar"}}\n{{name}}',
+        filename: "x.ts.tc",
+        templatePath: "/project/templates/x.ts.tc",
+        outputPath: "/project/output/x.ts.ts",
+      });
+      expect(result.code).toContain('from "../types/bar"');
+    });
+
+    it("emits import verbatim when outputPath is not provided", () => {
+      const result = compile({
+        template: '{{#import Foo from "../types/bar"}}\n{{name}}',
+        filename: "x.ts.tc",
+      });
+      expect(result.code).toContain('from "../types/bar"');
+    });
+
+    it("adjusts layout import path for outputPath", () => {
+      const result = compile({
+        template: '{{#import T from "./t"}}\n{{#layout "../layouts/base.html.tc"}}content{{/layout}}',
+        filename: "page.html.tc",
+        templatePath: "/project/templates/page.html.tc",
+        outputPath: "/project/.typecek/templates/page.html.ts",
+      });
+      expect(result.code).toContain('import __layout_0 from "../../layouts/base.html"');
+    });
+
+    it("adjusts partial import path for outputPath", () => {
+      const result = compile({
+        template: '{{#import T from "./t"}}\n{{> "../partials/header.html.tc" data}}',
+        filename: "page.html.tc",
+        templatePath: "/project/templates/page.html.tc",
+        outputPath: "/project/.typecek/templates/page.html.ts",
+      });
+      expect(result.code).toContain('import __partial_0 from "../../partials/header.html"');
+    });
+  });
 });
