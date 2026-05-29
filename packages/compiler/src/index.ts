@@ -356,17 +356,11 @@ export function compile(options: CompileOptions): CompileResult {
   }
 
   for (const { varName, importPath } of layoutImports) {
-    const emitPath = options.templatePath && options.outputPath
-      ? adjustImportPath(importPath, options.templatePath, options.outputPath)
-      : importPath;
-    code += `import ${varName} from "${emitPath}";\n`;
+    code += `import ${varName} from "${importPath}";\n`;
   }
 
   for (const { varName, importPath } of partialImports) {
-    const emitPath = options.templatePath && options.outputPath
-      ? adjustImportPath(importPath, options.templatePath, options.outputPath)
-      : importPath;
-    code += `import ${varName} from "${emitPath}";\n`;
+    code += `import ${varName} from "${importPath}";\n`;
   }
 
   code += `\n`;

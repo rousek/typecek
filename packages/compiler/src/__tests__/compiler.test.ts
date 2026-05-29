@@ -210,24 +210,24 @@ describe("compiler", () => {
       expect(result.code).toContain('from "../types/bar"');
     });
 
-    it("adjusts layout import path for outputPath", () => {
+    it("does not adjust layout import path (layouts are also compiled to .typecek)", () => {
       const result = compile({
         template: '{{#import T from "./t"}}\n{{#layout "../layouts/base.html.tc"}}content{{/layout}}',
         filename: "page.html.tc",
         templatePath: "/project/templates/page.html.tc",
         outputPath: "/project/.typecek/templates/page.html.ts",
       });
-      expect(result.code).toContain('import __layout_0 from "../../layouts/base.html"');
+      expect(result.code).toContain('import __layout_0 from "../layouts/base.html"');
     });
 
-    it("adjusts partial import path for outputPath", () => {
+    it("does not adjust partial import path (partials are also compiled to .typecek)", () => {
       const result = compile({
         template: '{{#import T from "./t"}}\n{{> "../partials/header.html.tc" data}}',
         filename: "page.html.tc",
         templatePath: "/project/templates/page.html.tc",
         outputPath: "/project/.typecek/templates/page.html.ts",
       });
-      expect(result.code).toContain('import __partial_0 from "../../partials/header.html"');
+      expect(result.code).toContain('import __partial_0 from "../partials/header.html"');
     });
   });
 });
