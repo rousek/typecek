@@ -1,6 +1,6 @@
 {
   "name": "@typecek/core",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Lexer, parser, AST definitions, and type-checker for Typecek",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
