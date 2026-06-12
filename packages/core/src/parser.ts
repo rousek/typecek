@@ -732,6 +732,7 @@ export function parse(template: string): TemplateAST {
       if (peekType() === TokenType.OpenBlock) {
         const nextToken = tokens[pos + 1];
         if (nextToken && nextToken.type === TokenType.BlockName && nextToken.value === "empty") {
+          trimEmptyMarkerOpen(body);
           pos++; // skip {{#
           pos++; // skip "empty" BlockName
           if (peekType() === TokenType.CloseExpression) pos++;
@@ -746,6 +747,7 @@ export function parse(template: string): TemplateAST {
               throw new ParseError(`Expected {{/empty}} but got {{/${closeBlockName.value}}}`, closeBlockName.line, closeBlockName.column, closeBlockName.value.length);
             }
             expect(TokenType.CloseExpression);
+            trimEmptyMarkerClose(emptyBlock, tokens[pos]);
           }
           continue;
         }
@@ -895,6 +897,7 @@ export function parse(template: string): TemplateAST {
       if (peekType() === TokenType.OpenBlock) {
         const nextToken = tokens[pos + 1];
         if (nextToken && nextToken.type === TokenType.BlockName && nextToken.value === "empty") {
+          trimEmptyMarkerOpen(body);
           pos++; // skip {{#
           pos++; // skip "empty" BlockName
           if (peekType() === TokenType.CloseExpression) pos++;
@@ -909,6 +912,7 @@ export function parse(template: string): TemplateAST {
               throw new ParseError(`Expected {{/empty}} but got {{/${closeBlockName.value}}}`, closeBlockName.line, closeBlockName.column, closeBlockName.value.length);
             }
             expect(TokenType.CloseExpression);
+            trimEmptyMarkerClose(emptyBlock, tokens[pos]);
           }
           continue;
         }
@@ -1017,6 +1021,38 @@ export function parse(template: string): TemplateAST {
   stripStandaloneWhitespace(body);
 
   return { typeDirective, body, hasContent: contentTagSeen !== null };
+}
+
+// --- Empty-marker line stripping ---
+// {{#empty}}/{{/empty}} split the surrounding block's body in place, so the
+// standalone pass below never sees them as nodes. Trim their line boundaries
+// at parse time instead: the indent the {{#empty}} tag sits on, and the
+// newline terminating a standalone {{/empty}} line (which would otherwise
+// re-enter the loop body and repeat per iteration).
+
+function trimEmptyMarkerOpen(body: ASTNode[]): void {
+  const last = body[body.length - 1];
+  if (last && last.type === NodeType.Text && /(^|\n)[ \t]*$/.test(last.value)) {
+    last.value = last.value.replace(/[ \t]*$/, "");
+  }
+}
+
+function trimEmptyMarkerClose(
+  emptyBlock: ASTNode[],
+  followingToken: Token | undefined,
+): void {
+  const last = emptyBlock[emptyBlock.length - 1];
+  const standalone =
+    emptyBlock.length === 0 ||
+    (last.type === NodeType.Text && /(^|\n)[ \t]*$/.test(last.value));
+  if (
+    standalone &&
+    followingToken &&
+    followingToken.type === TokenType.Text &&
+    followingToken.value.startsWith("\n")
+  ) {
+    followingToken.value = followingToken.value.replace(/^\n/, "");
+  }
 }
 
 // --- Standalone line stripping ---

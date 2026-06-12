@@ -169,6 +169,25 @@ describe("parser", () => {
       expect(forNode!.emptyBlock).toHaveLength(1);
     });
 
+    it("does not leak standalone {{#empty}}/{{/empty}} line breaks into the loop body", () => {
+      const ast = parse(
+        '{{#import T from "./t"}}\n{{#for item in items}}\n{{item.name}};\n{{#empty}}\nnone\n{{/empty}}\n{{/for}}'
+      );
+      const forNode = ast.body.find((n) => n.type === NodeType.ForBlock);
+      const bodyText = forNode!.body
+        .filter((n) => n.type === NodeType.Text)
+        .map((n) => (n as { value: string }).value)
+        .join("");
+      // One newline per iteration — the {{#empty}} line's indent and the
+      // {{/empty}} line's terminator must not re-enter the loop body.
+      expect(bodyText).toBe(";\n");
+      const emptyText = forNode!.emptyBlock!
+        .filter((n) => n.type === NodeType.Text)
+        .map((n) => (n as { value: string }).value)
+        .join("");
+      expect(emptyText).toBe("none\n");
+    });
+
     it("allows meta-variables inside for block", () => {
       const ast = parse(
         '{{#import T from "./t"}}\n{{#for item in items}}{{@index}}{{@first}}{{@last}}{{@length}}{{/for}}'
